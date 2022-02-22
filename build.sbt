@@ -1,12 +1,14 @@
-val scala3Version = "3.1.1"
+val scala2Version = "2.13.8"
 
 lazy val root = project
   .in(file("."))
   .settings(
-    name := "helloworld",
+    name := "revc-implementation",
     version := "0.1.0-SNAPSHOT",
-
-    scalaVersion := scala3Version,
-
-    libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test"
+    scalaVersion := scala2Version,
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-actor-typed" % "2.6.18",
+      "ch.qos.logback" % "logback-classic" % "1.2.10" % Runtime,
+      "com.novocode" % "junit-interface" % "0.11" % "test"
+    )
   )
