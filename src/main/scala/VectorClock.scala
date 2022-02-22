@@ -1,8 +1,10 @@
-class VectorClock extends LogicalClock {
+class VectorClock(me: Int, n: Int) extends LogicalClock {
     type ImplLogicalClock = VectorClock
 
+    private val vector = new Array[Int](n)
+
     def localTick(): Unit = {
-        println("test local tick")
+        vector(me) = vector(me) + 1
     }
 
     def mergeWith(a: ImplLogicalClock) : Unit = {
