@@ -3,45 +3,61 @@ import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 
-object ChildActor {
-  sealed trait Command
-  final case class ControlMessage(content: String, peer: ActorRef[PeerMessage]) extends Command
-  final case class PeerMessage(content: String) extends Command
+object ChildActor extends VectorClock {
+  sealed trait Message
+  final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]]) extends Message  // messages from the parent
+  final case class PeerMessage(content: String) extends Message   // messages to/from the other children
 
-  def apply(): Behavior[Command] = Behaviors.setup { context =>
+  var otherProcesses : Array[ActorRef[Message]] = Array()
+
+  def apply(): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("ChildActor {} up", context.self.path.name)
 
     Behaviors.receive { (context, message) =>
       message match {
-        case ControlMessage(content, peer) =>
-          context.log.info("received command to {}", content)
-          peer ! PeerMessage("hi")
+        case ControlMessage(peers) =>
+          otherProcesses = peers
+          context.log.info("{} received peers {}", context.self.path.name, peers)
+          for (i <- otherProcesses) {
+            if (i.path.name != context.self.path.name)  // send to all except self
+              i ! PeerMessage(f"hi from ${context.self.path.name} to ${i.path.name}")
+          }
         case PeerMessage(content) =>
           context.log.info("received {}", content)
       }
       Behaviors.same
     }
   }
+
+  override def tick(str: String): Unit = ???
+
+  override def merge(str: String): Unit = ???
+
+  override def compare(str: String): Unit = ???
 }
 
 object ParentActor {
   final case class SpawnActors(number: Int)
 
   def apply(): Behavior[SpawnActors] = Behaviors.receive { (context, message) =>
-    // upon receiving the message, spawn the children
-    val process1 = context.spawn(ChildActor(), "process1")
-    val process2 = context.spawn(ChildActor(), "process2")
+    val processList = new Array[ActorRef[ChildActor.Message]](message.number)
 
-    process1 ! ControlMessage("messsage peer", process2)
-    // tell process1 to send a message to process2
-    // process1 ! ChildActor.ControlMessage("log", process2) // can't get this to work
+    // upon receiving the message, spawn the children
+    for (i <- 0 until message.number) {
+      processList(i) = context.spawn(ChildActor(), "process" + i)
+    }
+
+    // send to each child an array of its peers
+    for (j <- 0 until message.number) {
+      processList(j) ! ControlMessage(processList)
+    }
 
     Behaviors.same
   }
 }
 
 object Main extends App {
-  val numberOfThreads: Int = 2
+  val numberOfThreads: Int = 3
 
   // start the actor system
   val parentThread: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
