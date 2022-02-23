@@ -1,0 +1,7 @@
+project/*
+target/*
+.idea/*
+.vscode/*
+.bloop/*
+.metals/*
+.bsp/*
