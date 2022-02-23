@@ -4,17 +4,21 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 
 object ChildActor {
-  final case class ControlMessage(content: String, peer: ActorRef[ControlMessage])
-  // final case class PeerMessage(content: String, peer: ActorRef[PeerMessage])
+  sealed trait Command
+  final case class ControlMessage(content: String, peer: ActorRef[PeerMessage]) extends Command
+  final case class PeerMessage(content: String) extends Command
 
-  def apply(): Behavior[ControlMessage] = Behaviors.setup { context =>
+  def apply(): Behavior[Command] = Behaviors.setup { context =>
     context.log.info("ChildActor {} up", context.self.path.name)
 
     Behaviors.receive { (context, message) =>
-      context.log.info("ChildActor {} received {}", context.self.path.name, message.content)
-
-      // message.peer ! PeerMessage("hi")
-
+      message match {
+        case ControlMessage(content, peer) =>
+          context.log.info("received command to {}", content)
+          peer ! PeerMessage("hi")
+        case PeerMessage(content) =>
+          context.log.info("received {}", content)
+      }
       Behaviors.same
     }
   }
@@ -28,7 +32,7 @@ object ParentActor {
     val process1 = context.spawn(ChildActor(), "process1")
     val process2 = context.spawn(ChildActor(), "process2")
 
-    process1 ! ControlMessage("hi", process2)
+    process1 ! ControlMessage("messsage peer", process2)
     // tell process1 to send a message to process2
     // process1 ! ChildActor.ControlMessage("log", process2) // can't get this to work
 
