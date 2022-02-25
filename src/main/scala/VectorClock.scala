@@ -1,7 +1,7 @@
 class VectorClock(me: Int, n: Int) extends LogicalClock {
     type ImplementedLogicalClock = VectorClock
 
-    private val vector = new Array[Int](n)
+    private val vector = Array.fill(n)(0)
 
     def getVector(): Array[Int] = {
         return vector.clone
