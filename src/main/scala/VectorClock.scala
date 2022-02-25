@@ -1,6 +1,5 @@
 class VectorClock(me: Int, n: Int) extends LogicalClock {
     type ImplementedLogicalClock = VectorClock
-    type InternalRepresentation = Array[Int]
 
     private val vector = new Array[Int](n)
 
