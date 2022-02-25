@@ -4,5 +4,5 @@ trait LogicalClock {
 
     def localTick(): Unit 
     def mergeWith(x: ImplementedLogicalClock): Unit 
-    def compareWith(x: ImplementedLogicalClock): Boolean
+    def compareWith(x: ImplementedLogicalClock): TimestampOrdering
 }
