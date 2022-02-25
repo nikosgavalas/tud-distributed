@@ -22,18 +22,4 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
 
      }
 
-     /* def canEqual(a: Any) = a.isInstanceOf[VectorClock] */
-
-     /* def compareWith(a: ImplLogicalClock): Boolean = {
-
-        def equals(that: Any): Boolean =
-            that match {
-                case that: VectorClock => that.canEqual(this) && this.hashCode == that.hashCode
-                case _ => false
-            }
-        println("test compare with")
-        return true
-     } */
-
-
 }
