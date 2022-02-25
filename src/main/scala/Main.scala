@@ -3,12 +3,13 @@ import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 
-object ChildActor extends VectorClock {
+object ChildActor {
   sealed trait Message
   final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]]) extends Message  // messages from the parent
   final case class PeerMessage(content: String) extends Message   // messages to/from the other children
 
-  var otherProcesses : Array[ActorRef[Message]] = Array()
+  val otherProcesses : Array[ActorRef[Message]] = Array()
+  val myClock : LogicalClock = null
 
   def apply(): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("ChildActor {} up", context.self.path.name)
@@ -28,12 +29,6 @@ object ChildActor extends VectorClock {
       Behaviors.same
     }
   }
-
-  override def tick(str: String): Unit = ???
-
-  override def merge(str: String): Unit = ???
-
-  override def compare(str: String): Unit = ???
 }
 
 object ParentActor {
