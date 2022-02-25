@@ -1,4 +1,3 @@
-import java.security.Timestamp
 class VectorClock(me: Int, n: Int) extends LogicalClock {
     type ImplementedLogicalClock = VectorClock
     type InternalRepresentation = Array[Int]
