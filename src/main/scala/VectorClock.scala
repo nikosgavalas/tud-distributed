@@ -1,5 +1,6 @@
 class VectorClock(me: Int, n: Int) extends LogicalClock {
-    type ImplLogicalClock = VectorClock
+    type ImplementedLogicalClock = VectorClock
+    type InternalRepresentation = Array[Int]
 
     private val vector = new Array[Int](n)
 
@@ -8,14 +9,14 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
 
     }
 
-    def mergeWith(a: ImplLogicalClock) : Unit = {
+    def mergeWith(a: ImplementedLogicalClock) : Unit = {
 
         println("test merge with")
     }
 
 
 
-     def compareWith(a: ImplLogicalClock): Boolean = {
+     def compareWith(a: ImplementedLogicalClock): Boolean = {
 
          println("test compare with")
          return true

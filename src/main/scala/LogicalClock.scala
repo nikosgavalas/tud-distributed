@@ -1,8 +1,8 @@
 trait LogicalClock {
     // define type of implementing class
-    type ImplLogicalClock 
+    type ImplementedLogicalClock 
 
     def localTick(): Unit 
-    def mergeWith(x: ImplLogicalClock): Unit 
-    def compareWith(x: ImplLogicalClock): Boolean
+    def mergeWith(x: ImplementedLogicalClock): Unit 
+    def compareWith(x: ImplementedLogicalClock): Boolean
 }
