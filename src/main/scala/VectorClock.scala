@@ -9,6 +9,7 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
 
     def localTick(): Unit = {
         vector(me) = vector(me) + 1
+        println("local tick in clock: " + me.toString())
     }
 
     def mergeWith(a: ImplementedLogicalClock) : Unit = {

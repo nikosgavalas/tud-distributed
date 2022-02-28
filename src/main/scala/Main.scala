@@ -5,19 +5,23 @@ import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 
 object ChildActor {
   sealed trait Message
-  final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]]) extends Message  // messages from the parent
+  final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message  // messages from the parent
   final case class PeerMessage(content: String) extends Message   // messages to/from the other children
 
-  val otherProcesses : Array[ActorRef[Message]] = Array()
-  val myClock : LogicalClock = null
+  var otherProcesses : Array[ActorRef[Message]] = Array()
+  var myIndex : Int = -1
+  var myClock : LogicalClock = null
 
   def apply(): Behavior[Message] = Behaviors.setup { context =>
     context.log.info("ChildActor {} up", context.self.path.name)
 
     Behaviors.receive { (context, message) =>
       message match {
-        case ControlMessage(peers) =>
+        case ControlMessage(peers, childIndex) =>
           otherProcesses = peers
+          myIndex = childIndex 
+          myClock = new VectorClock(myIndex, peers.length)
+          myClock.localTick() 
           context.log.info("{} received peers {}", context.self.path.name, peers)
           for (i <- otherProcesses) {
             if (i.path.name != context.self.path.name)  // send to all except self
@@ -42,9 +46,9 @@ object ParentActor {
       processList(i) = context.spawn(ChildActor(), "process" + i)
     }
 
-    // send to each child an array of its peers
+    // send relevant information to each child
     for (j <- 0 until message.number) {
-      processList(j) ! ControlMessage(processList)
+      processList(j) ! ControlMessage(processList, j)
     }
 
     Behaviors.same
