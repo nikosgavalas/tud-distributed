@@ -1,11 +1,11 @@
 object Primes {
 
     def getPrime(index: Int) : Int = {
-        return primes(index)
+        primes(index)
     }
 
     // List of 1000 primes
-    val primes = Array(
+    val primes: Array[Int] = Array(
     2,
     3,
     5,

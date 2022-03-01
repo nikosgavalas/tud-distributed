@@ -1,20 +1,19 @@
 class VectorClock(me: Int, n: Int) extends LogicalClock {
-    type ImplementedLogicalClock = VectorClock
-
     private val vector = Array.fill(n)(0)
 
     def getVector(): Array[Int] = {
-        return vector.clone
+        vector.clone
     }
 
     def localTick(): Unit = {
         vector(me) = vector(me) + 1
-        println("local tick in clock: " + me.toString())
+        println("local tick in clock:" + me.toString)
     }
 
-    def mergeWith(a: ImplementedLogicalClock) : Unit = {
+    def mergeWith(a: LogicalClock) : Unit = {
+        val clock = a.asInstanceOf[VectorClock]
         // Get representation of passed vector clock
-        val mergeVector = a.getVector()
+        val mergeVector = clock.getVector()
         assert(mergeVector.length == n)
 
         for (i <- 0 until n) {
@@ -23,9 +22,10 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-     def compareWith(a: ImplementedLogicalClock): TimestampOrdering = {
+    def compareWith(a: LogicalClock): TimestampOrdering = {
+        val clock = a.asInstanceOf[VectorClock]
         // Get representation of passed vector clock
-        val otherVector = a.getVector()
+        val otherVector = clock.getVector()
         assert(otherVector.length == n)
         
         // Initialize current ordering with first element of vectors
@@ -64,7 +64,10 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
             }
         }
 
-        return curOrdering
-     }
+        curOrdering
+    }
 
+    override def toString: String = {
+        me + ": " + vector.mkString("(", ", ", ")")
+    }
 }
