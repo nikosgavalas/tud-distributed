@@ -1,27 +1,27 @@
 class EncVectorClock(me: Int, n: Int) {
-  type ImplementedLogicalClock = EncVectorClock
-
     private var scalar : BigInt = 1
     private val myPrime : Int = Primes.getPrime(me)
 
     def getScalar(): BigInt = {
-        return scalar
+        scalar
     }
 
     def localTick(): Unit = {
         scalar = scalar * myPrime
     }
 
-    def mergeWith(a: ImplementedLogicalClock) : Unit = {
+    def mergeWith(a: LogicalClock) : Unit = {
         // Get representation of passed vector clock
-        val mergeScalar = a.getScalar()
+        val clock = a.asInstanceOf[EncVectorClock]
+        val mergeScalar = clock.getScalar()
         scalar = (scalar * mergeScalar) / scalar.gcd(mergeScalar)
-        
     }
 
-     def compareWith(a: ImplementedLogicalClock): TimestampOrdering = {
+     def compareWith(a: LogicalClock): TimestampOrdering = {
         // Get representation of passed vector clock
-        val otherScalar = a.getScalar()
+        // Get representation of passed vector clock
+        val clock = a.asInstanceOf[EncVectorClock]
+        val otherScalar = clock.getScalar()
         
         // TODO: Think about a way to extract strict before and after relation
         if (scalar < otherScalar && otherScalar % scalar == 0) {
