@@ -1,7 +1,9 @@
 class VectorClock(me: Int, n: Int) extends LogicalClock {
+    type Rep = Array[Int]
+
     private val vector = Array.fill(n)(0)
 
-    def getVector(): Array[Int] = {
+    def getTimestamp() : Rep = {
         vector.clone
     }
 
@@ -10,10 +12,7 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         println("local tick in clock:" + me.toString)
     }
 
-    def mergeWith(a: LogicalClock) : Unit = {
-        val clock = a.asInstanceOf[VectorClock]
-        // Get representation of passed vector clock
-        val mergeVector = clock.getVector()
+    def mergeWith(mergeVector: Rep) : Unit = {
         assert(mergeVector.length == n)
 
         for (i <- 0 until n) {
@@ -22,10 +21,7 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-    def compareWith(a: LogicalClock): TimestampOrdering = {
-        val clock = a.asInstanceOf[VectorClock]
-        // Get representation of passed vector clock
-        val otherVector = clock.getVector()
+    def compareWith(otherVector: Rep): TimestampOrdering = {
         assert(otherVector.length == n)
         
         // Initialize current ordering with first element of vectors

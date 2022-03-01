@@ -1,8 +1,10 @@
 class EncVectorClock(me: Int, n: Int) {
+    type Rep = BigInt
+
     private var scalar : BigInt = 1
     private val myPrime : Int = Primes.getPrime(me)
 
-    def getScalar(): BigInt = {
+    def getTimestamp(): Rep = {
         scalar
     }
 
@@ -10,19 +12,11 @@ class EncVectorClock(me: Int, n: Int) {
         scalar = scalar * myPrime
     }
 
-    def mergeWith(a: LogicalClock) : Unit = {
-        // Get representation of passed vector clock
-        val clock = a.asInstanceOf[EncVectorClock]
-        val mergeScalar = clock.getScalar()
+    def mergeWith(mergeScalar: Rep) : Unit = {
         scalar = (scalar * mergeScalar) / scalar.gcd(mergeScalar)
     }
 
-     def compareWith(a: LogicalClock): TimestampOrdering = {
-        // Get representation of passed vector clock
-        // Get representation of passed vector clock
-        val clock = a.asInstanceOf[EncVectorClock]
-        val otherScalar = clock.getScalar()
-        
+     def compareWith(otherScalar: Rep): TimestampOrdering = {        
         // TODO: Think about a way to extract strict before and after relation
         if (scalar < otherScalar && otherScalar % scalar == 0) {
             return BeforeEqual

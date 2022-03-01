@@ -8,7 +8,7 @@ import scala.util.Random
 object ChildActor {
     sealed trait Message
     final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message  // messages from the parent
-    final case class PeerMessage(content: String, clock: LogicalClock) extends Message   // messages to/from the other children
+    final case class PeerMessage(content: String, timestamp: Any) extends Message   // messages to/from the other children
 
     var allProcesses : Array[ActorRef[Message]] = Array()
 
@@ -41,18 +41,18 @@ object ChildActor {
 
                     if (childIndex == 0) {
                         myClock.localTick()
-                        allProcesses(1) ! PeerMessage("init msg", myClock)  // p1 sends an initial message to trigger the cyclic delivery
+                        allProcesses(1) ! PeerMessage("init msg", myClock.getTimestamp())  // p1 sends an initial message to trigger the cyclic delivery
                     }
 
-                case PeerMessage(content, otherClock) =>
+                case PeerMessage(content, timestamp) =>
                     context.log.info("{} received {} with vc {}", context.self.path.name, content, otherClock)
 
-                    myClock.mergeWith(otherClock)
+                    myClock.mergeWith(timestamp)
                     myClock.localTick()
 
                     if (messageCounter < 2) {
                         myClock.localTick()
-                        allProcesses((myIndex + 1) % allProcesses.length) ! PeerMessage("msg", myClock)
+                        allProcesses((myIndex + 1) % allProcesses.length) ! PeerMessage("msg", myClock.getTimestamp())
                     }
 
                     messageCounter += 1
