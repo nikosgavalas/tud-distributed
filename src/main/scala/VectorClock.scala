@@ -21,7 +21,12 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-    def compareWith(otherVector: Rep): TimestampOrdering = {
+    def compareWith(otherVector: Rep): Boolean = {
+        // Returns true if Before, BeforeEqual or Same
+        return List(Before, BeforeEqual, Same).contains(getOrdering(otherVector))
+    }
+
+    def getOrdering(otherVector: Rep): TimestampOrdering = { 
         assert(otherVector.length == n)
         
         // Initialize current ordering with first element of vectors
