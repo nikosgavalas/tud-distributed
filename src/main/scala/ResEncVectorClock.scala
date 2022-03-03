@@ -1,6 +1,6 @@
 case class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt])
 
-class ResEncVectorClock(me: Int, n: Int) {
+class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
     type Rep = REVCTimestamp
 
     // Prime assigned to this clock
@@ -33,7 +33,8 @@ class ResEncVectorClock(me: Int, n: Int) {
         }
     }
 
-    def mergeWith(revcTimestamp: Rep) : Unit = {
+    def mergeWith(merge: Any) : Unit = {
+        val revcTimestamp = merge.asInstanceOf[Rep]
         val otherScalar = revcTimestamp.scalar
         val otherFrame = revcTimestamp.frame 
         val otherFrameHistory = revcTimestamp.frameHistory
@@ -76,7 +77,9 @@ class ResEncVectorClock(me: Int, n: Int) {
         }
     }
 
-    def compareWith(t2 : Rep) : Boolean = {
+    def compareWith(compare : Any) : Boolean = {
+        val t2 = compare.asInstanceOf[Rep]
+
         // Returns true if Before, BeforeEqual or Same
         if (frame > t2.frame) {
             return false 

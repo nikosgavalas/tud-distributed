@@ -1,4 +1,4 @@
-class EncVectorClock(me: Int, n: Int) {
+class EncVectorClock(me: Int, n: Int) extends LogicalClock {
     type Rep = BigInt
 
     // Prime assigned to this clock
@@ -15,11 +15,13 @@ class EncVectorClock(me: Int, n: Int) {
         scalar = scalar * myPrime
     }
 
-    def mergeWith(mergeScalar: Rep) : Unit = {
+    def mergeWith(merge: Any) : Unit = {
+        val mergeScalar = merge.asInstanceOf[Rep]
         scalar = (scalar * mergeScalar) / scalar.gcd(mergeScalar)
     }
 
-     def compareWith(otherScalar: Rep): Boolean = {        
+     def compareWith(compare: Any): Boolean = {        
+        val otherScalar = compare.asInstanceOf[Rep]
         // Returns true if Before, BeforeEqual or Same
         return List(Before, BeforeEqual, Same).contains(getOrdering(otherScalar))
      }

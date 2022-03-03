@@ -12,7 +12,8 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         println("local tick in clock:" + me.toString)
     }
 
-    def mergeWith(mergeVector: Rep) : Unit = {
+    def mergeWith(merge: Any) : Unit = {
+        val mergeVector = merge.asInstanceOf[Rep]
         assert(mergeVector.length == n)
 
         for (i <- 0 until n) {
@@ -21,7 +22,8 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-    def compareWith(otherVector: Rep): Boolean = {
+    def compareWith(compare: Any): Boolean = {
+        val otherVector = compare.asInstanceOf[Rep]
         // Returns true if Before, BeforeEqual or Same
         return List(Before, BeforeEqual, Same).contains(getOrdering(otherVector))
     }

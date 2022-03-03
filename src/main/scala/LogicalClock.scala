@@ -3,6 +3,6 @@ trait LogicalClock {
 
     def getTimestamp() : Rep
     def localTick(): Unit
-    def mergeWith(x: LogicalClock): Unit
-    def compareWith(x: LogicalClock): Boolean
+    def mergeWith(x: Any): Unit
+    def compareWith(x: Any): Boolean
 }

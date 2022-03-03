@@ -35,7 +35,7 @@ object ChildActor {
                 case ControlMessage(peers, childIndex) =>
                     allProcesses = peers
                     myIndex = childIndex
-                    myClock = new VectorClock(myIndex, peers.length)
+                    myClock = new ResEncVectorClock(myIndex, peers.length)
 
                     context.log.info("{} received peers {}", context.self.path.name, peers)
 
@@ -45,8 +45,8 @@ object ChildActor {
                     }
 
                 case PeerMessage(content, timestamp) =>
-                    context.log.info("{} received {} with vc {}", context.self.path.name, content, otherClock)
-
+                    context.log.info("{} received {} with timestamp {}", context.self.path.name, content, timestamp)
+                    
                     myClock.mergeWith(timestamp)
                     myClock.localTick()
 
