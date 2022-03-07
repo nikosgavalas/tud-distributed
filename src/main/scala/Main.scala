@@ -14,8 +14,10 @@ object Config {
 
 object ChildActor {
     sealed trait Message
-    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message  // messages from the parent
-    final case class PeerMessage(content: String, timestamps: List[Any]) extends Message   // messages to/from the other children
+    // messages from the parent
+    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message
+    // messages to/from other children
+    final case class PeerMessage(content: String, timestamps: List[Any]) extends Message
 
     var allPeers : Array[ActorRef[Message]] = Array()
 
@@ -31,13 +33,26 @@ object ChildActor {
         Thread.sleep(Random.between(1, Config.maxWorkTime))
     }
 
+    // helper function to print the clocks
+    def timestampsToString(timestamps: List[Any]): String = {
+        val ret: StringBuilder = new StringBuilder("")
+        for (ts <- timestamps) {
+            ts match {
+                case ints: Array[Int] => ret ++= ints.mkString("[", ",", "]")
+                case _ => ret ++= ts.toString
+            }
+            ret += '-'
+        }
+        ret.toString()
+    }
+
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var myIndex : Int = -1
         var messageCounter: Int = 0
 
         val clocks: Clocks = new Clocks(Config.clocksActive)
 
-        context.log.info("ChildActor {} up", context.self.path.name)
+        context.log.info(s"ChildActor ${context.self.path.name} up")
 
         Behaviors.receive { (context, message) =>
             message match {
@@ -48,7 +63,7 @@ object ChildActor {
                     // each actor initializes their clocks
                     clocks.initialize(myIndex, peers.length)
 
-                    // context.log.info("{} received peers {}", context.self.path.name, peers)
+                    // context.log.info(s"${context.self.path.name} received peers ${peers}")
 
                     if (childIndex == 0) {
                         // p0 sends an initial message to trigger the deliveries
@@ -57,7 +72,7 @@ object ChildActor {
                     }
 
                 case PeerMessage(content, timestamps) =>
-                    context.log.info("{} received {} with timestamps {} {} {}", context.self.path.name, content, timestampVC, timestampEVC, timestampREVC)
+                    context.log.info(s"${context.self.path.name} received ${content} with ${timestampsToString(timestamps)}")
 
                     // merge and tick
                     clocks.merge(timestamps)
@@ -73,10 +88,8 @@ object ChildActor {
 
                     if (messageCounter < Config.maxMessagesPerChild) {
                         // tick and send
-                        myVC.localTick()
-                        myEVC.localTick()
-                        myREVC.localTick()
-                        allPeers(Random.between(0, allPeers.length)) ! PeerMessage("msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
+                        clocks.tick()
+                        allPeers(Random.between(0, allPeers.length)) ! PeerMessage("msg", clocks.getTimestamps())
                     }
 
                     messageCounter += 1

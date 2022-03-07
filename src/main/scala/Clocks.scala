@@ -6,7 +6,7 @@ class Clocks(clocksActive: List[String]) {
     def initialize(index: Int, numPeers: Int): Unit = {
         if (clocksActive.contains("VC"))
             clocks += new VectorClock(index, numPeers)
-        if (clocksActive.contains("ECV"))
+        if (clocksActive.contains("EVC"))
             clocks += new EncVectorClock(index, numPeers)
         if (clocksActive.contains("REVC"))
             clocks += new ResEncVectorClock(index, numPeers)
@@ -26,5 +26,8 @@ class Clocks(clocksActive: List[String]) {
 
     def allConsistent(timestamps: List[Any]): Boolean = {
         val checks = clocks.zip(timestamps).map{case (clock, timestamp) => clock.compareWith(timestamp)}.toList
+        val all_true = checks.reduce((i, j) => i && j)
+        val all_false = ! checks.reduce((i, j) => i || j)
+        all_true || all_false
     }
 }
