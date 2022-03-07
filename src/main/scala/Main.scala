@@ -9,18 +9,20 @@ object Config {
     val doWork: Boolean = true
     val maxWorkTime: Int = 20
     val maxMessagesPerChild: Int = 1000
+    val clocksActive: List[String] = List[String]("VC", "EVC", "REVC")
 }
 
 object ChildActor {
     sealed trait Message
     final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message  // messages from the parent
-    final case class PeerMessage(content: String, timestampVC: Any, timestampEVC: Any, timestampREVC: Any) extends Message   // messages to/from the other children
+    final case class PeerMessage(content: String, timestamps: List[Any]) extends Message   // messages to/from the other children
 
-    var allProcesses : Array[ActorRef[Message]] = Array()
+    var allPeers : Array[ActorRef[Message]] = Array()
 
     def broadcast(peerMessage: PeerMessage, context: ActorContext[Message]): Unit = {
-        for (i <- allProcesses) {
-            if (i.path.name != context.self.path.name)  // send to all except self
+        // send to all except self
+        for (i <- allPeers) {
+            if (i.path.name != context.self.path.name)
                 i ! peerMessage
         }
     }
@@ -31,55 +33,40 @@ object ChildActor {
 
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var myIndex : Int = -1
-
         var messageCounter: Int = 0
 
-        var myVC : VectorClock = null
-        var myEVC : EncVectorClock = null
-        var myREVC : ResEncVectorClock = null
+        val clocks: Clocks = new Clocks(Config.clocksActive)
 
         context.log.info("ChildActor {} up", context.self.path.name)
 
         Behaviors.receive { (context, message) =>
             message match {
                 case ControlMessage(peers, childIndex) =>
-                    allProcesses = peers
+                    allPeers = peers
                     myIndex = childIndex
 
                     // each actor initializes their clocks
-                    myVC = new VectorClock(myIndex, peers.length)
-                    myEVC = new EncVectorClock(myIndex, peers.length)
-                    myREVC = new ResEncVectorClock(myIndex, peers.length)
+                    clocks.initialize(myIndex, peers.length)
 
                     // context.log.info("{} received peers {}", context.self.path.name, peers)
 
                     if (childIndex == 0) {
                         // p0 sends an initial message to trigger the deliveries
-                        myVC.localTick()
-                        myEVC.localTick()
-                        myREVC.localTick()
-                        allProcesses(1) ! PeerMessage("init msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
+                        clocks.tick()
+                        allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps())
                     }
 
-                case PeerMessage(content, timestampVC, timestampEVC, timestampREVC) =>
+                case PeerMessage(content, timestamps) =>
                     context.log.info("{} received {} with timestamps {} {} {}", context.self.path.name, content, timestampVC, timestampEVC, timestampREVC)
 
                     // merge and tick
-                    myVC.mergeWith(timestampVC)
-                    myEVC.mergeWith(timestampEVC)
-                    myREVC.mergeWith(timestampREVC)
-                    myVC.localTick()
-                    myEVC.localTick()
-                    myREVC.localTick()
+                    clocks.merge(timestamps)
+                    clocks.tick()
 
                     if (Config.doWork)
                         doWork()
 
-                    val compVC = myVC.compareWith(timestampVC)
-                    val compEVC = myEVC.compareWith(timestampEVC)
-                    val compREVC = myREVC.compareWith(timestampREVC)
-
-                    if (compVC != compEVC || compEVC != compREVC) {
+                    if (! clocks.allConsistent(timestamps)) {
                         println("clocks inconsistent")
                         sys.exit(1)
                     }
@@ -89,7 +76,7 @@ object ChildActor {
                         myVC.localTick()
                         myEVC.localTick()
                         myREVC.localTick()
-                        allProcesses(Random.between(0, allProcesses.length)) ! PeerMessage("msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
+                        allPeers(Random.between(0, allPeers.length)) ! PeerMessage("msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
                     }
 
                     messageCounter += 1
