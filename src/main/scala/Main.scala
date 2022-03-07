@@ -2,8 +2,14 @@ import ChildActor.ControlMessage
 import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-
 import scala.util.Random
+
+object Config {
+    val numberOfThreads: Int = 3
+    val doWork: Boolean = true
+    val maxWorkTime: Int = 20
+    val maxMessagesPerChild: Int = 1000
+}
 
 object ChildActor {
     sealed trait Message
@@ -20,14 +26,13 @@ object ChildActor {
     }
 
     def doWork(): Unit = {
-        Thread.sleep(Random.between(1, 100))
+        Thread.sleep(Random.between(1, Config.maxWorkTime))
     }
 
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var myIndex : Int = -1
 
         var messageCounter: Int = 0
-        val maxNumberOfMessages: Int = 1000
 
         var myVC : VectorClock = null
         var myEVC : EncVectorClock = null
@@ -41,6 +46,7 @@ object ChildActor {
                     allProcesses = peers
                     myIndex = childIndex
 
+                    // each actor initializes their clocks
                     myVC = new VectorClock(myIndex, peers.length)
                     myEVC = new EncVectorClock(myIndex, peers.length)
                     myREVC = new ResEncVectorClock(myIndex, peers.length)
@@ -48,16 +54,17 @@ object ChildActor {
                     // context.log.info("{} received peers {}", context.self.path.name, peers)
 
                     if (childIndex == 0) {
+                        // p0 sends an initial message to trigger the deliveries
                         myVC.localTick()
                         myEVC.localTick()
                         myREVC.localTick()
-
-                        allProcesses(1) ! PeerMessage("init msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())  // p1 sends an initial message to trigger the cyclic delivery
+                        allProcesses(1) ! PeerMessage("init msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
                     }
 
                 case PeerMessage(content, timestampVC, timestampEVC, timestampREVC) =>
-                    // context.log.info("{} received {} with timestamps {} {} {}", context.self.path.name, content, timestampVC, timestampEVC, timestampREVC)
-                    
+                    context.log.info("{} received {} with timestamps {} {} {}", context.self.path.name, content, timestampVC, timestampEVC, timestampREVC)
+
+                    // merge and tick
                     myVC.mergeWith(timestampVC)
                     myEVC.mergeWith(timestampEVC)
                     myREVC.mergeWith(timestampREVC)
@@ -65,7 +72,8 @@ object ChildActor {
                     myEVC.localTick()
                     myREVC.localTick()
 
-                    doWork()
+                    if (Config.doWork)
+                        doWork()
 
                     val compVC = myVC.compareWith(timestampVC)
                     val compEVC = myEVC.compareWith(timestampEVC)
@@ -76,7 +84,8 @@ object ChildActor {
                         sys.exit(1)
                     }
 
-                    if (messageCounter < maxNumberOfMessages) {
+                    if (messageCounter < Config.maxMessagesPerChild) {
+                        // tick and send
                         myVC.localTick()
                         myEVC.localTick()
                         myREVC.localTick()
@@ -99,7 +108,7 @@ object ParentActor {
 
         // upon receiving the message, spawn the children
         for (i <- 0 until message.number) {
-            processList(i) = context.spawn(ChildActor(), "process" + i)
+            processList(i) = context.spawn(ChildActor(), "Process-" + i)
         }
 
         // send relevant information to each child
@@ -112,11 +121,9 @@ object ParentActor {
 }
 
 object Main extends App {
-    val numberOfThreads: Int = 3
-
     // start the actor system
-    val parentThread: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
+    val parentActor: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
 
     // send a message to ParentActor to spawn children
-    parentThread ! SpawnActors(numberOfThreads)
+    parentActor ! SpawnActors(Config.numberOfThreads)
 }
