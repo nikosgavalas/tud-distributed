@@ -5,17 +5,17 @@ import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import scala.util.Random
 
 object Config {
-    val numberOfThreads: Int = 3
-    val doWork: Boolean = true
+    val numberOfThreads: Int = 10
+    val doWork: Boolean = false
     val maxWorkTime: Int = 20
     val maxMessagesPerChild: Int = 1000
-    val clocksActive: List[String] = List[String]("VC", "EVC", "REVC")
+    val clocksActive: List[String] = List[String]("VC")
 }
 
 object ChildActor {
     sealed trait Message
     // messages from the parent
-    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message
+    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], parentActor: ActorRef[ParentActor.Message], childIndex: Int) extends Message
     // messages to/from other children
     final case class PeerMessage(content: String, timestamps: List[Any]) extends Message
 
@@ -49,6 +49,7 @@ object ChildActor {
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var myIndex : Int = -1
         var messageCounter: Int = 0
+        var parentActor: ActorRef[ParentActor.Message] = null
 
         val clocks: Clocks = new Clocks(Config.clocksActive)
 
@@ -56,8 +57,9 @@ object ChildActor {
 
         Behaviors.receive { (context, message) =>
             message match {
-                case ControlMessage(peers, childIndex) =>
+                case ControlMessage(peers, parent, childIndex) =>
                     allPeers = peers
+                    parentActor = parent
                     myIndex = childIndex
 
                     // each actor initializes their clocks
@@ -86,13 +88,15 @@ object ChildActor {
                         sys.exit(1)
                     }
 
-                    if (messageCounter < Config.maxMessagesPerChild) {
-                        // tick and send
-                        clocks.tick()
-                        allPeers(Random.between(0, allPeers.length)) ! PeerMessage("msg", clocks.getTimestamps())
-                    }
+                    // tick and send
+                    clocks.tick()
+                    allPeers(Random.between(0, allPeers.length)) ! PeerMessage("msg", clocks.getTimestamps())
 
                     messageCounter += 1
+
+                    if (messageCounter == Config.maxMessagesPerChild) {
+                        parentActor ! ParentActor.ChildDone()
+                    }
             }
 
             Behaviors.same
@@ -101,22 +105,45 @@ object ChildActor {
 }
 
 object ParentActor {
-    final case class SpawnActors(number: Int)
+    sealed trait Message
+    final case class SpawnActors(number: Int) extends Message
+    final case class ChildDone() extends Message
 
-    def apply(): Behavior[SpawnActors] = Behaviors.receive { (context, message) =>
-        val processList = new Array[ActorRef[ChildActor.Message]](message.number)
+    def apply(): Behavior[Message] = Behaviors.setup { context =>
+        var numberOfChildren = 0
+        var childrenDone = 0
+        var processList: Array[ActorRef[ChildActor.Message]] = null
+        val startTime = System.nanoTime
 
-        // upon receiving the message, spawn the children
-        for (i <- 0 until message.number) {
-            processList(i) = context.spawn(ChildActor(), "Process-" + i)
+        Behaviors.receive { (context, message) =>
+            message match {
+                case SpawnActors(number) =>
+                    numberOfChildren = number
+                    processList = new Array[ActorRef[ChildActor.Message]](numberOfChildren)
+
+                    // upon receiving the message, spawn the children
+                    for (i <- 0 until numberOfChildren) {
+                        processList(i) = context.spawn(ChildActor(), "Process-" + i)
+                    }
+
+                    // send relevant information to each child
+                    for (j <- 0 until numberOfChildren) {
+                        processList(j) ! ControlMessage(processList, context.self, j)
+                    }
+
+                case ChildDone() =>
+                    // when all children finish, exit.
+                    childrenDone += 1
+                    if (childrenDone == numberOfChildren) {
+                        for (process <- processList) {
+                            context.stop(process)
+                        }
+                        println(s"duration: ${(System.nanoTime - startTime) / 1e9d} seconds")
+                        sys.exit(0)
+                    }
+            }
+            Behaviors.same
         }
-
-        // send relevant information to each child
-        for (j <- 0 until message.number) {
-            processList(j) ! ControlMessage(processList, j)
-        }
-
-        Behaviors.same
     }
 }
 
