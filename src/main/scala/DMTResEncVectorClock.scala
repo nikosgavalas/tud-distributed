@@ -55,20 +55,6 @@ class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
         val otherFrame = revcTimestamp.frame 
         val otherFrameHistory = revcTimestamp.frameHistory
         val otherDifferences = revcTimestamp.differences
-        
-        def addToFrameHistory(frameIndex : Int, value : BigInt) : Unit = {
-            if (!(frameHistory.contains(frameIndex) && value == frameHistory.getOrElse(frameIndex, -1))) {
-                // frameHistory needs to be updated
-                frameHistory += (frameIndex -> value)
-                
-                // Update differences map 
-                for ((curOtherIndex, curOtherList) <- differences) {
-                    if (!curOtherList.contains(frameIndex)) {
-                        differences += (curOtherIndex -> curOtherList.append(frameIndex))
-                    }
-                }
-            } 
-        }
 
         def mergeScalars(s1: BigInt, s2: BigInt) : BigInt = {
             // Returns LCM of two scalars
@@ -77,23 +63,23 @@ class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
         
         def historyMerge() : Unit = {
             // Differential merge
-            for (tempFrame <- otherDifferences.getOrElse(me, List[Int]())) {
+            for (tempFrame <- otherDifferences.getOrElse(me, otherFrameHistory.keys)) {
                 val tempScalar = otherFrameHistory.getOrElse(tempFrame, BigInt(-1))
                 if (frameHistory.contains(tempFrame)) {
                     // Update tempFrame value in frameHistory
-                    frameHistory += (tempFrame -> mergeScalars(frameHistory.getOrElse(tempFrame, 0), tempScalar))
+                    addToFrameHistory(tempFrame, mergeScalars(frameHistory.getOrElse(tempFrame, 0), tempScalar))
                 } else {
                     // Add tempFrame to frameHistory
-                    frameHistory += (tempFrame -> tempScalar)
+                    addToFrameHistory(tempFrame, tempScalar)
                 }
             }
         }
 
         if (frame > otherFrame) {
-            frameHistory += (otherFrame -> mergeScalars(frameHistory.getOrElse(otherFrame, 0), otherScalar))
+            addToFrameHistory(otherFrame, mergeScalars(frameHistory.getOrElse(otherFrame, 0), otherScalar))
             historyMerge()
         } else if (otherFrame > frame) {
-            frameHistory += (frame -> scalar)
+            addToFrameHistory(frame, scalar)
             frame = otherFrame 
             scalar = otherScalar
             historyMerge()
@@ -120,6 +106,21 @@ class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
+    def addToFrameHistory(frameIndex : Int, value : BigInt) : Unit = {
+        if (!(frameHistory.contains(frameIndex) && value == frameHistory.getOrElse(frameIndex, -1))) {
+            // frameHistory needs to be updated
+            frameHistory += (frameIndex -> value)
+            
+            // Update differences map 
+            for ((curOtherIndex, curOtherList) <- differences) {
+                if (!curOtherList.contains(frameIndex)) {
+                    curOtherList += frameIndex
+                    differences += (curOtherIndex -> curOtherList)
+                }
+            }
+        } 
+    }
+
     def causesOverflow(toCheck: BigInt) : Boolean = {
         // Returns whether toCheck causes an overflow
         return (toCheck.bitLength > bitsToOverflow)
@@ -127,7 +128,7 @@ class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
 
     def reset(newScalarValue: BigInt) : Unit = {
         // Resets current representation of REVC 
-        frameHistory += (frame -> scalar)
+        addToFrameHistory(frame, scalar)
         frame += 1 
         scalar = newScalarValue
     }
