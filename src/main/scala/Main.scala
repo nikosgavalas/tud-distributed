@@ -7,11 +7,11 @@ import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import scala.util.Random
 
 object Config {
-    val numberOfThreads: Int = 3
+    val numberOfThreads: Int = 10
     val doWork: Boolean = false
-    val maxWorkTime: Int = 20
+    val maxWorkTime: Int = 30
     val maxMessagesPerChild: Int = 100
-    val clocksActive: List[String] = List[String]("DMTREVC")
+    val clocksActive: List[String] = List[String]("VC", "EVC", "REVC", "DMTREVC")
 }
 
 object ChildActor {
@@ -80,10 +80,8 @@ object ChildActor {
                     // tick and send
                     clocks.tick()
                     val receivingPeer = Random.between(0, allPeers.length);
-                    
                     allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps())
-
-                    // temporary hack
+                    // for the DMTREVC specifically, we need to call mergedInto
                     if (clocksActive.contains("DMTREVC")) {
                         clocks.clocks.foreach {
                             case clock: DMTResEncVectorClock =>
@@ -148,6 +146,7 @@ object ParentActor {
 }
 
 object Main extends App {
+    //Random.setSeed(1)
     // start the actor system
     val parentActor: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
 
