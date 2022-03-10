@@ -80,6 +80,9 @@ object ChildActor {
                     // tick and send
                     clocks.tick()
                     val receivingPeer = Random.between(0, allPeers.length);
+                    
+                    allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps())
+
                     // temporary hack
                     if (clocksActive.contains("DMTREVC")) {
                         clocks.clocks.foreach {
@@ -88,7 +91,6 @@ object ChildActor {
                             case _ =>
                         }
                     }
-                    allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps())
 
                     messageCounter += 1
 
