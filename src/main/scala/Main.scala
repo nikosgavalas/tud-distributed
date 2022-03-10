@@ -31,7 +31,7 @@ object ChildActor {
 
         var myVC : VectorClock = null
         var myEVC : EncVectorClock = null
-        var myREVC : ResEncVectorClock = null
+        var myREVC : DMTResEncVectorClock = null
 
         context.log.info("ChildActor {} up", context.self.path.name)
 
@@ -43,7 +43,7 @@ object ChildActor {
 
                     myVC = new VectorClock(myIndex, peers.length)
                     myEVC = new EncVectorClock(myIndex, peers.length)
-                    myREVC = new ResEncVectorClock(myIndex, peers.length)
+                    myREVC = new DMTResEncVectorClock(myIndex, peers.length)
 
                     // context.log.info("{} received peers {}", context.self.path.name, peers)
 
@@ -80,7 +80,9 @@ object ChildActor {
                         myVC.localTick()
                         myEVC.localTick()
                         myREVC.localTick()
-                        allProcesses(Random.between(0, allProcesses.length)) ! PeerMessage("msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
+                        val receivingPeer = Random.between(0, allProcesses.length)
+                        myREVC.mergedInto(receivingPeer)
+                        allProcesses(receivingPeer) ! PeerMessage("msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
                     }
 
                     messageCounter += 1
