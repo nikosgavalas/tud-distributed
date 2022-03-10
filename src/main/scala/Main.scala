@@ -2,90 +2,101 @@ import ChildActor.ControlMessage
 import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-
 import scala.util.Random
+
+object Config {
+    val numberOfThreads: Int = 10
+    val doWork: Boolean = false
+    val maxWorkTime: Int = 20
+    val maxMessagesPerChild: Int = 1000
+    val clocksActive: List[String] = List[String]("VC")
+}
 
 object ChildActor {
     sealed trait Message
-    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], childIndex: Int) extends Message  // messages from the parent
-    final case class PeerMessage(content: String, timestampVC: Any, timestampEVC: Any, timestampREVC: Any) extends Message   // messages to/from the other children
+    // messages from the parent
+    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], parentActor: ActorRef[ParentActor.Message], childIndex: Int) extends Message
+    // messages to/from other children
+    final case class PeerMessage(content: String, timestamps: List[Any]) extends Message
 
-    var allProcesses : Array[ActorRef[Message]] = Array()
+    var allPeers : Array[ActorRef[Message]] = Array()
 
     def broadcast(peerMessage: PeerMessage, context: ActorContext[Message]): Unit = {
-        for (i <- allProcesses) {
-            if (i.path.name != context.self.path.name)  // send to all except self
+        // send to all except self
+        for (i <- allPeers) {
+            if (i.path.name != context.self.path.name)
                 i ! peerMessage
         }
     }
 
     def doWork(): Unit = {
-        Thread.sleep(Random.between(1, 100))
+        Thread.sleep(Random.between(1, Config.maxWorkTime))
+    }
+
+    // helper function to print the clocks
+    def timestampsToString(timestamps: List[Any]): String = {
+        val ret: StringBuilder = new StringBuilder("")
+        for (ts <- timestamps) {
+            ts match {
+                case ints: Array[Int] => ret ++= ints.mkString("[", ",", "]")
+                case _ => ret ++= ts.toString
+            }
+            ret += '-'
+        }
+        ret.toString()
     }
 
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var myIndex : Int = -1
-
         var messageCounter: Int = 0
-        val maxNumberOfMessages: Int = 1000
+        var parentActor: ActorRef[ParentActor.Message] = null
 
-        var myVC : VectorClock = null
-        var myEVC : EncVectorClock = null
-        var myREVC : DMTResEncVectorClock = null
+        val clocks: Clocks = new Clocks(Config.clocksActive)
 
-        context.log.info("ChildActor {} up", context.self.path.name)
+        context.log.info(s"ChildActor ${context.self.path.name} up")
 
         Behaviors.receive { (context, message) =>
             message match {
-                case ControlMessage(peers, childIndex) =>
-                    allProcesses = peers
+                case ControlMessage(peers, parent, childIndex) =>
+                    allPeers = peers
+                    parentActor = parent
                     myIndex = childIndex
 
-                    myVC = new VectorClock(myIndex, peers.length)
-                    myEVC = new EncVectorClock(myIndex, peers.length)
-                    myREVC = new DMTResEncVectorClock(myIndex, peers.length)
+                    // each actor initializes their clocks
+                    clocks.initialize(myIndex, peers.length)
 
-                    // context.log.info("{} received peers {}", context.self.path.name, peers)
+                    // context.log.info(s"${context.self.path.name} received peers ${peers}")
 
                     if (childIndex == 0) {
-                        myVC.localTick()
-                        myEVC.localTick()
-                        myREVC.localTick()
-
-                        allProcesses(1) ! PeerMessage("init msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())  // p1 sends an initial message to trigger the cyclic delivery
+                        // p0 sends an initial message to trigger the deliveries
+                        clocks.tick()
+                        allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps())
                     }
 
-                case PeerMessage(content, timestampVC, timestampEVC, timestampREVC) =>
-                    // context.log.info("{} received {} with timestamps {} {} {}", context.self.path.name, content, timestampVC, timestampEVC, timestampREVC)
-                    
-                    myVC.mergeWith(timestampVC)
-                    myEVC.mergeWith(timestampEVC)
-                    myREVC.mergeWith(timestampREVC)
-                    myVC.localTick()
-                    myEVC.localTick()
-                    myREVC.localTick()
+                case PeerMessage(content, timestamps) =>
+                    context.log.info(s"${context.self.path.name} received ${content} with ${timestampsToString(timestamps)}")
 
-                    doWork()
+                    // merge and tick
+                    clocks.merge(timestamps)
+                    clocks.tick()
 
-                    val compVC = myVC.compareWith(timestampVC)
-                    val compEVC = myEVC.compareWith(timestampEVC)
-                    val compREVC = myREVC.compareWith(timestampREVC)
+                    if (Config.doWork)
+                        doWork()
 
-                    if (compVC != compEVC || compEVC != compREVC) {
+                    if (! clocks.allConsistent(timestamps)) {
                         println("clocks inconsistent")
                         sys.exit(1)
                     }
 
-                    if (messageCounter < maxNumberOfMessages) {
-                        myVC.localTick()
-                        myEVC.localTick()
-                        myREVC.localTick()
-                        val receivingPeer = Random.between(0, allProcesses.length)
-                        myREVC.mergedInto(receivingPeer)
-                        allProcesses(receivingPeer) ! PeerMessage("msg", myVC.getTimestamp(), myEVC.getTimestamp(), myREVC.getTimestamp())
-                    }
+                    // tick and send
+                    clocks.tick()
+                    allPeers(Random.between(0, allPeers.length)) ! PeerMessage("msg", clocks.getTimestamps())
 
                     messageCounter += 1
+
+                    if (messageCounter == Config.maxMessagesPerChild) {
+                        parentActor ! ParentActor.ChildDone()
+                    }
             }
 
             Behaviors.same
@@ -94,31 +105,52 @@ object ChildActor {
 }
 
 object ParentActor {
-    final case class SpawnActors(number: Int)
+    sealed trait Message
+    final case class SpawnActors(number: Int) extends Message
+    final case class ChildDone() extends Message
 
-    def apply(): Behavior[SpawnActors] = Behaviors.receive { (context, message) =>
-        val processList = new Array[ActorRef[ChildActor.Message]](message.number)
+    def apply(): Behavior[Message] = Behaviors.setup { context =>
+        var numberOfChildren = 0
+        var childrenDone = 0
+        var processList: Array[ActorRef[ChildActor.Message]] = null
+        val startTime = System.nanoTime
 
-        // upon receiving the message, spawn the children
-        for (i <- 0 until message.number) {
-            processList(i) = context.spawn(ChildActor(), "process" + i)
+        Behaviors.receive { (context, message) =>
+            message match {
+                case SpawnActors(number) =>
+                    numberOfChildren = number
+                    processList = new Array[ActorRef[ChildActor.Message]](numberOfChildren)
+
+                    // upon receiving the message, spawn the children
+                    for (i <- 0 until numberOfChildren) {
+                        processList(i) = context.spawn(ChildActor(), "Process-" + i)
+                    }
+
+                    // send relevant information to each child
+                    for (j <- 0 until numberOfChildren) {
+                        processList(j) ! ControlMessage(processList, context.self, j)
+                    }
+
+                case ChildDone() =>
+                    // when all children finish, exit.
+                    childrenDone += 1
+                    if (childrenDone == numberOfChildren) {
+                        for (process <- processList) {
+                            context.stop(process)
+                        }
+                        println(s"duration: ${(System.nanoTime - startTime) / 1e9d} seconds")
+                        sys.exit(0)
+                    }
+            }
+            Behaviors.same
         }
-
-        // send relevant information to each child
-        for (j <- 0 until message.number) {
-            processList(j) ! ControlMessage(processList, j)
-        }
-
-        Behaviors.same
     }
 }
 
 object Main extends App {
-    val numberOfThreads: Int = 3
-
     // start the actor system
-    val parentThread: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
+    val parentActor: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
 
     // send a message to ParentActor to spawn children
-    parentThread ! SpawnActors(numberOfThreads)
+    parentActor ! SpawnActors(Config.numberOfThreads)
 }
