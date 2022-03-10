@@ -1,5 +1,5 @@
 import scala.collection.mutable.ArrayBuffer
-case class DMTREVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt], differences: Map[Int, Array[Int]])
+case class DMTREVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt], differences: Map[Int, List[Int]])
 
 class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
     type Rep = DMTREVCTimestamp
@@ -26,11 +26,11 @@ class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
 
         // Copy frameHistory to an immutable Map
         var frameHistoryCopy = Map[Int, BigInt](frameHistory.toSeq: _*)
-        val differencesImmutable = scala.collection.mutable.Map[Int, Array[Int]]()
+        val differencesImmutable = scala.collection.mutable.Map[Int, List[Int]]()
         for ((tempFrame, tempBuffer) <- differences) {
-            differencesImmutable += (tempFrame -> tempBuffer.toArray)
+            differencesImmutable += (tempFrame -> tempBuffer.toList)
         }
-        var differencesCopy = Map[Int, Array[Int]](differencesImmutable.toSeq: _*)
+        var differencesCopy = Map[Int, List[Int]](differencesImmutable.toList: _*)
 
         // Create and return new timestamp
         new DMTREVCTimestamp(scalar, frame, frameHistoryCopy, differencesCopy)
@@ -77,7 +77,7 @@ class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
         
         def historyMerge() : Unit = {
             // Differential merge
-            for (tempFrame <- otherDifferences.getOrElse(me, Array[Int]())) {
+            for (tempFrame <- otherDifferences.getOrElse(me, List[Int]())) {
                 val tempScalar = otherFrameHistory.getOrElse(tempFrame, BigInt(-1))
                 if (frameHistory.contains(tempFrame)) {
                     // Update tempFrame value in frameHistory

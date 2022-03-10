@@ -10,6 +10,8 @@ class Clocks(clocksActive: List[String]) {
             clocks += new EncVectorClock(index, numPeers)
         if (clocksActive.contains("REVC"))
             clocks += new ResEncVectorClock(index, numPeers)
+        if (clocksActive.contains("DMTREVC"))
+            clocks += new DMTResEncVectorClock(index, numPeers)
     }
 
     def tick(): Unit = {

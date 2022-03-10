@@ -1,15 +1,17 @@
 import ChildActor.ControlMessage
+import Config.clocksActive
 import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+
 import scala.util.Random
 
 object Config {
-    val numberOfThreads: Int = 10
+    val numberOfThreads: Int = 3
     val doWork: Boolean = false
     val maxWorkTime: Int = 20
-    val maxMessagesPerChild: Int = 1000
-    val clocksActive: List[String] = List[String]("VC")
+    val maxMessagesPerChild: Int = 100
+    val clocksActive: List[String] = List[String]("DMTREVC")
 }
 
 object ChildActor {
@@ -31,19 +33,6 @@ object ChildActor {
 
     def doWork(): Unit = {
         Thread.sleep(Random.between(1, Config.maxWorkTime))
-    }
-
-    // helper function to print the clocks
-    def timestampsToString(timestamps: List[Any]): String = {
-        val ret: StringBuilder = new StringBuilder("")
-        for (ts <- timestamps) {
-            ts match {
-                case ints: Array[Int] => ret ++= ints.mkString("[", ",", "]")
-                case _ => ret ++= ts.toString
-            }
-            ret += '-'
-        }
-        ret.toString()
     }
 
     def apply(): Behavior[Message] = Behaviors.setup { context =>
@@ -74,7 +63,7 @@ object ChildActor {
                     }
 
                 case PeerMessage(content, timestamps) =>
-                    context.log.info(s"${context.self.path.name} received ${content} with ${timestampsToString(timestamps)}")
+                    context.log.info(s"${context.self.path.name} received '${content}' with timestamps: ${clocksActive.zip(timestamps)}")
 
                     // merge and tick
                     clocks.merge(timestamps)

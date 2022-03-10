@@ -1,10 +1,10 @@
 class VectorClock(me: Int, n: Int) extends LogicalClock {
-    type Rep = Array[Int]
+    type Rep = List[Int]
 
     private val vector = Array.fill(n)(0)
 
     def getTimestamp() : Rep = {
-        vector.clone
+        vector.clone.toList
     }
 
     def localTick(): Unit = {
