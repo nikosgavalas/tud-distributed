@@ -1,4 +1,6 @@
-// This has been inspired by the Akka VectorClock implementation
+package logicalclocks
+
+// This has been inspired by the Akka logicalclocks.VectorClock implementation
 // https://github.com/akka/akka/blob/main/akka-cluster/src/main/scala/akka/cluster/VectorClock.scala
 sealed trait TimestampOrdering
 case object After extends TimestampOrdering

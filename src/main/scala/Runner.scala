@@ -2,6 +2,7 @@ import ChildActor.{BeginMessage, ControlMessage}
 import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
+import logicalclocks.DMTResEncVectorClock
 
 import scala.util.Random
 
@@ -46,7 +47,7 @@ object ChildActor {
         var messageCounter: Int = 0
         var parentActor: ActorRef[ParentActor.Message] = null
 
-        var clocks: Clocks = null
+        var clocks: ClocksWrapper = null
         var selectedClocksList: List[String] = null
 
         context.log.debug(s"ChildActor ${context.self.path.name} up")
@@ -60,7 +61,7 @@ object ChildActor {
                     selectedClocksList = selectedClocks
 
                     // each actor initializes their clocks
-                    clocks = new Clocks(myIndex, peers.length, selectedClocksList)
+                    clocks = new ClocksWrapper(myIndex, peers.length, selectedClocksList)
 
                     context.log.debug(s"${context.self.path.name} received peers $peers")
 
@@ -85,7 +86,7 @@ object ChildActor {
 
                     // tick and send to a randomly selected peer
                     clocks.tick()
-                    val receivingPeer = Random.between(0, allPeers.length);
+                    val receivingPeer = Random.between(0, allPeers.length)
                     allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps)
                     // for the DMTREVC specifically, we need to also call mergedInto
                     if (selectedClocksList.contains("DMTREVC")) {

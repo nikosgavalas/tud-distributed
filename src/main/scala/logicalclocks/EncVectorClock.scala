@@ -1,3 +1,5 @@
+package logicalclocks
+
 class EncVectorClock(me: Int, n: Int) extends LogicalClock {
     type Rep = BigInt
 
@@ -22,7 +24,7 @@ class EncVectorClock(me: Int, n: Int) extends LogicalClock {
 
      def compareWith(compare: Any): Boolean = {        
         val otherScalar = compare.asInstanceOf[Rep]
-        // Returns true if Before, BeforeEqual or Same
+        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
         return List(Before, BeforeEqual, Same).contains(getOrdering(otherScalar))
      }
 

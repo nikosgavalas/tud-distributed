@@ -1,6 +1,8 @@
+import logicalclocks.{DMTResEncVectorClock, EncVectorClock, LogicalClock, ResEncVectorClock, VectorClock}
+
 import scala.collection.mutable
 
-class Clocks(index: Int, numPeers: Int, selectedClocks: List[String]) {
+class ClocksWrapper(index: Int, numPeers: Int, selectedClocks: List[String]) {
     val clocks: mutable.Map[String, LogicalClock] = mutable.SortedMap[String, LogicalClock]()
 
     if (selectedClocks.contains("VC"))

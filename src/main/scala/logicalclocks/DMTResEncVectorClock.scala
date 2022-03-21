@@ -1,15 +1,24 @@
-case class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt])
+package logicalclocks
 
-class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
-    type Rep = REVCTimestamp
+import scala.collection.mutable.ArrayBuffer
+case class DMTREVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt], differences: Map[Int, List[Int]])
+
+class DMTResEncVectorClock(me: Int, n: Int) extends LogicalClock {
+    type Rep = DMTREVCTimestamp
 
     // Prime assigned to this clock
     private val myPrime : Int = Primes.getPrime(me)
 
-    // Current representation of REVC
+    // Current representation of DMTREVC
     private var scalar : BigInt = 1
     private var frame : Int = 0 
     private val frameHistory = scala.collection.mutable.Map[Int, BigInt]()
+
+    // Keep track of latest merged frame from each of the other clocks
+    private val differences = scala.collection.mutable.Map[Int, scala.collection.mutable.ArrayBuffer[Int]]()
+    for (i <- 0 until n) {
+        differences += (i -> ArrayBuffer[Int]())
+    }
 
     // Max size for scalar to indicate overflows
     private val bitsToOverflow : Int = 16 
@@ -19,9 +28,14 @@ class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
 
         // Copy frameHistory to an immutable Map
         var frameHistoryCopy = Map[Int, BigInt](frameHistory.toSeq: _*)
+        val differencesImmutable = scala.collection.mutable.Map[Int, List[Int]]()
+        for ((tempFrame, tempBuffer) <- differences) {
+            differencesImmutable += (tempFrame -> tempBuffer.toList)
+        }
+        var differencesCopy = Map[Int, List[Int]](differencesImmutable.toList: _*)
 
         // Create and return new timestamp
-        new REVCTimestamp(scalar, frame, frameHistoryCopy)
+        new DMTREVCTimestamp(scalar, frame, frameHistoryCopy, differencesCopy)
     }
 
     def localTick(): Unit = {
@@ -32,37 +46,42 @@ class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
             scalar = temp
         }
     }
+    	
+    def mergedInto(index: Int) {
+        differences += (index -> ArrayBuffer[Int]())
+    }
 
     def mergeWith(merge: Any) : Unit = {
         val revcTimestamp = merge.asInstanceOf[Rep]
         val otherScalar = revcTimestamp.scalar
         val otherFrame = revcTimestamp.frame 
         val otherFrameHistory = revcTimestamp.frameHistory
-        
+        val otherDifferences = revcTimestamp.differences
+
         def mergeScalars(s1: BigInt, s2: BigInt) : BigInt = {
             // Returns LCM of two scalars
             (s1 * s2) / s1.gcd(s2)
         }
-
+        
         def historyMerge() : Unit = {
-            // Merges frameHistory with otherFrameHistory
-
-            for ((tempFrame, tempScalar) <- otherFrameHistory) {
+            // Differential merge
+            for (tempFrame <- otherDifferences.getOrElse(me, otherFrameHistory.keys)) {
+                val tempScalar = otherFrameHistory.getOrElse(tempFrame, BigInt(-1))
                 if (frameHistory.contains(tempFrame)) {
                     // Update tempFrame value in frameHistory
-                    frameHistory += (tempFrame -> mergeScalars(frameHistory.getOrElse(tempFrame, 0), tempScalar))
+                    addToFrameHistory(tempFrame, mergeScalars(frameHistory.getOrElse(tempFrame, 0), tempScalar))
                 } else {
                     // Add tempFrame to frameHistory
-                    frameHistory += (tempFrame -> tempScalar)
+                    addToFrameHistory(tempFrame, tempScalar)
                 }
             }
         }
 
         if (frame > otherFrame) {
-            frameHistory += (otherFrame -> mergeScalars(frameHistory.getOrElse(otherFrame, 0), otherScalar))
+            addToFrameHistory(otherFrame, mergeScalars(frameHistory.getOrElse(otherFrame, 0), otherScalar))
             historyMerge()
         } else if (otherFrame > frame) {
-            frameHistory += (frame -> scalar)
+            addToFrameHistory(frame, scalar)
             frame = otherFrame 
             scalar = otherScalar
             historyMerge()
@@ -80,13 +99,28 @@ class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
     def compareWith(compare : Any) : Boolean = {
         val t2 = compare.asInstanceOf[Rep]
 
-        // Returns true if Before, BeforeEqual or Same
+        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
         if (frame > t2.frame) {
             return false 
         } else {
             val scalarToCompare = t2.frameHistory.getOrElse(frame, t2.scalar)
             return (scalar <= scalarToCompare && scalarToCompare % scalar == 0)
         }
+    }
+
+    def addToFrameHistory(frameIndex : Int, value : BigInt) : Unit = {
+        if (!(frameHistory.contains(frameIndex) && value == frameHistory.getOrElse(frameIndex, -1))) {
+            // frameHistory needs to be updated
+            frameHistory += (frameIndex -> value)
+            
+            // Update differences map 
+            for ((curOtherIndex, curOtherList) <- differences) {
+                if (!curOtherList.contains(frameIndex)) {
+                    curOtherList += frameIndex
+                    differences += (curOtherIndex -> curOtherList)
+                }
+            }
+        } 
     }
 
     def causesOverflow(toCheck: BigInt) : Boolean = {
@@ -96,7 +130,7 @@ class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
 
     def reset(newScalarValue: BigInt) : Unit = {
         // Resets current representation of REVC 
-        frameHistory += (frame -> scalar)
+        addToFrameHistory(frame, scalar)
         frame += 1 
         scalar = newScalarValue
     }

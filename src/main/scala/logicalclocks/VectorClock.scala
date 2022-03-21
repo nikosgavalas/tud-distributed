@@ -1,3 +1,5 @@
+package logicalclocks
+
 class VectorClock(me: Int, n: Int) extends LogicalClock {
     type Rep = List[Int]
 
@@ -23,7 +25,7 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
 
     def compareWith(compare: Any): Boolean = {
         val otherVector = compare.asInstanceOf[Rep]
-        // Returns true if Before, BeforeEqual or Same
+        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
         return List(Before, BeforeEqual, Same).contains(getOrdering(otherVector))
     }
 
