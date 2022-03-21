@@ -1,5 +1,4 @@
-import ChildActor.ControlMessage
-import Config.clocksActive
+import ChildActor.{BeginMessage, ControlMessage}
 import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
@@ -7,21 +6,28 @@ import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import scala.util.Random
 
 object Config {
-    val numberOfThreads: Int = 10
     val doWork: Boolean = false
-    val maxWorkTime: Int = 30
+    val maxWorkTime: Int = 20
     val maxMessagesPerChild: Int = 100
-    val clocksActive: List[String] = List[String]("VC", "EVC", "REVC", "DMTREVC")
 }
 
 object ChildActor {
     sealed trait Message
+
     // messages from the parent
-    final case class ControlMessage(peers: Array[ActorRef[ChildActor.Message]], parentActor: ActorRef[ParentActor.Message], childIndex: Int) extends Message
+    final case class ControlMessage(peers: List[ActorRef[ChildActor.Message]],
+                                    parentActor: ActorRef[ParentActor.Message],
+                                    childIndex: Int,
+                                    selectedClocks: List[String]
+                                   ) extends Message
+
     // messages to/from other children
     final case class PeerMessage(content: String, timestamps: List[Any]) extends Message
 
-    var allPeers : Array[ActorRef[Message]] = Array()
+    // message from the parent that signals the start of message deliveries
+    final case class BeginMessage() extends Message
+
+    var allPeers: List[ActorRef[Message]] = List()
 
     def broadcast(peerMessage: PeerMessage, context: ActorContext[Message]): Unit = {
         // send to all except self
@@ -36,34 +42,34 @@ object ChildActor {
     }
 
     def apply(): Behavior[Message] = Behaviors.setup { context =>
-        var myIndex : Int = -1
+        var myIndex: Int = -1
         var messageCounter: Int = 0
         var parentActor: ActorRef[ParentActor.Message] = null
 
-        val clocks: Clocks = new Clocks(Config.clocksActive)
+        var clocks: Clocks = null
+        var selectedClocksList: List[String] = null
 
-        context.log.info(s"ChildActor ${context.self.path.name} up")
+        context.log.debug(s"ChildActor ${context.self.path.name} up")
 
         Behaviors.receive { (context, message) =>
             message match {
-                case ControlMessage(peers, parent, childIndex) =>
+                case ControlMessage(peers, parent, childIndex, selectedClocks) =>
                     allPeers = peers
                     parentActor = parent
                     myIndex = childIndex
+                    selectedClocksList = selectedClocks
 
                     // each actor initializes their clocks
-                    clocks.initialize(myIndex, peers.length)
+                    clocks = new Clocks(myIndex, peers.length, selectedClocksList)
 
-                    // context.log.info(s"${context.self.path.name} received peers ${peers}")
+                    context.log.debug(s"${context.self.path.name} received peers $peers")
 
-                    if (childIndex == 0) {
-                        // p0 sends an initial message to trigger the deliveries
-                        clocks.tick()
-                        allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps())
-                    }
+                case BeginMessage() =>
+                    clocks.tick()
+                    allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps)
 
                 case PeerMessage(content, timestamps) =>
-                    context.log.info(s"${context.self.path.name} received '${content}' with timestamps: ${clocksActive.zip(timestamps)}")
+                    context.log.debug(s"${context.self.path.name} received '$content' with timestamps: ${selectedClocksList.zip(timestamps)}")
 
                     // merge and tick
                     clocks.merge(timestamps)
@@ -72,22 +78,18 @@ object ChildActor {
                     if (Config.doWork)
                         doWork()
 
-                    if (! clocks.allConsistent(timestamps)) {
+                    if (!clocks.allConsistent(timestamps)) {
                         println("clocks inconsistent")
                         sys.exit(1)
                     }
 
-                    // tick and send
+                    // tick and send to a randomly selected peer
                     clocks.tick()
                     val receivingPeer = Random.between(0, allPeers.length);
-                    allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps())
-                    // for the DMTREVC specifically, we need to call mergedInto
-                    if (clocksActive.contains("DMTREVC")) {
-                        clocks.clocks.foreach {
-                            case clock: DMTResEncVectorClock =>
-                                clock.mergedInto(receivingPeer)
-                            case _ =>
-                        }
+                    allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps)
+                    // for the DMTREVC specifically, we need to also call mergedInto
+                    if (selectedClocksList.contains("DMTREVC")) {
+                        clocks.getClock("DMTREVC").asInstanceOf[DMTResEncVectorClock].mergedInto(receivingPeer)
                     }
 
                     messageCounter += 1
@@ -104,30 +106,32 @@ object ChildActor {
 
 object ParentActor {
     sealed trait Message
-    final case class SpawnActors(number: Int) extends Message
+
+    final case class SpawnActors(number: Int, selectedClocks: List[String]) extends Message
+
     final case class ChildDone() extends Message
 
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var numberOfChildren = 0
         var childrenDone = 0
-        var processList: Array[ActorRef[ChildActor.Message]] = null
+        var processList: List[ActorRef[ChildActor.Message]] = null
         val startTime = System.nanoTime
 
         Behaviors.receive { (context, message) =>
             message match {
-                case SpawnActors(number) =>
+                case SpawnActors(number, selectedClocks) =>
                     numberOfChildren = number
-                    processList = new Array[ActorRef[ChildActor.Message]](numberOfChildren)
 
                     // upon receiving the message, spawn the children
-                    for (i <- 0 until numberOfChildren) {
-                        processList(i) = context.spawn(ChildActor(), "Process-" + i)
-                    }
+                    processList = (0 until numberOfChildren)
+                      .map(childIndex => context.spawn(ChildActor(), "Process-" + childIndex)).toList
 
                     // send relevant information to each child
-                    for (j <- 0 until numberOfChildren) {
-                        processList(j) ! ControlMessage(processList, context.self, j)
-                    }
+                    processList.zip(0 until numberOfChildren).foreach{case (child, childIndex) =>
+                        child ! ControlMessage(processList, context.self, childIndex, selectedClocks)}
+
+                    // send a BeginMessage to the first child to trigger the message deliveries
+                    processList.head ! BeginMessage()
 
                 case ChildDone() =>
                     // when all children finish, exit.
@@ -146,10 +150,18 @@ object ParentActor {
 }
 
 object Main extends App {
-    //Random.setSeed(1)
+
+    if (args.length < 2) {
+        println(s"Run with arguments: <number of actors> <clocks separated with commas>")
+        sys.exit(1)
+    }
+    val nActors: Int = args(0).toInt
+    val selectedClocks: List[String] = args(1).split(",").toList.sorted
+    println(s"Starting execution with $nActors actors and $selectedClocks clocks")
+
     // start the actor system
     val parentActor: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
 
     // send a message to ParentActor to spawn children
-    parentActor ! SpawnActors(Config.numberOfThreads)
+    parentActor ! SpawnActors(nActors, selectedClocks)
 }
