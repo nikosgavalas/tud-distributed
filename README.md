@@ -6,4 +6,4 @@
 
 ## Running the experiments
 
-Run the [run.sh](./experiments/run.sh) script under the experiments: `./experiments/run.sh`
+Run the [run.sh](./experiments/run.sh) script under `experiments`: `./experiments/run.sh`
