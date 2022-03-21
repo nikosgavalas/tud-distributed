@@ -8,10 +8,10 @@ def load(path):
         # headers = next(reader)
         return np.array(list(reader)).astype(float)
 
-vc = load('vc.csv')
-evc = load('evc.csv')
-revc = load('revc.csv')
-dmtrevc = load('dmtrevc.csv')
+vc = load('csv/VC.csv')
+evc = load('csv/EVC.csv')
+revc = load('csv/REVC.csv')
+dmtrevc = load('csv/DMTREVC.csv')
 
 time = vc[:, 0]
 

@@ -9,7 +9,7 @@ import scala.util.Random
 object Config {
     val doWork: Boolean = false
     val maxWorkTime: Int = 20
-    val maxMessagesPerChild: Int = 100
+    val maxMessagesPerChild: Int = 10000
 }
 
 object ChildActor {
