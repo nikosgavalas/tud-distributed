@@ -62,6 +62,7 @@ object ChildActor {
 
                     // each actor initializes their clocks
                     clocks = new ClocksWrapper(myIndex, peers.length, selectedClocksList)
+                    println(clocks.getMemorySizes())
 
                     context.log.debug(s"${context.self.path.name} received peers $peers")
 

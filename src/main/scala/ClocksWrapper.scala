@@ -36,4 +36,12 @@ class ClocksWrapper(index: Int, numPeers: Int, selectedClocks: List[String]) {
         val all_false = ! checks.reduce((i, j) => i || j)
         all_true || all_false
     }
+
+    def getMemorySizes(): Map[String, Long] = {
+        val memory : mutable.Map[String, Long] = mutable.Map[String, Long]()
+        for ((name, clock) <- clocks) {
+            memory += (name -> ObjectSizeFetcher.getObjectSize(clock.getTimestamp()))
+        }
+        return Map[String, Long](memory.toSeq: _*)
+    }
 }
