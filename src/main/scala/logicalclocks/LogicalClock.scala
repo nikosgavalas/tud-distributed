@@ -10,4 +10,6 @@ trait LogicalClock {
     def mergeWith(x: Any): Unit
 
     def compareWith(x: Any): Boolean
+
+    def getSizeBits: Int
 }

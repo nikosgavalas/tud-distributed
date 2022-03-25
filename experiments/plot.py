@@ -8,34 +8,32 @@ def load(path):
         # headers = next(reader)
         return np.array(list(reader)).astype(float)
 
-vc = load('csv/VC.csv')
-evc = load('csv/EVC.csv')
-revc = load('csv/REVC.csv')
-dmtrevc = load('csv/DMTREVC.csv')
+def plot(what, xlabel, ylabel, title):
+    vc = load(f'csv/{what}/VC.csv')
+    evc = load(f'csv/{what}/EVC.csv')
+    revc = load(f'csv/{what}/REVC.csv')
+    dmtrevc = load(f'csv/{what}/DMTREVC.csv')
 
-time = vc[:, 0]
+    trim_to = min(len(vc), len(evc), len(revc), len(dmtrevc))
+    vc = vc[:trim_to]
+    evc = evc[:trim_to]
+    revc = revc[:trim_to]
+    dmtrevc = dmtrevc[:trim_to]
 
-fig, ax1 = plt.subplots()
+    x = vc[:, 0]
 
-color = ''
-ax1.set_xlabel('Number of processes')
-ax1.set_ylabel('Time (s)')
-ax1.plot(time, vc[:, 1], label='VC')
-ax1.plot(time, evc[:, 1], label='EVC')
-ax1.plot(time, revc[:, 1], label='REVC')
-ax1.plot(time, dmtrevc[:, 1], label='DMTREVC')
-ax1.tick_params(axis='y')
-ax1.legend()
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.plot(x, vc[:, 1], label='VC')
+    plt.plot(x, evc[:, 1], label='EVC')
+    plt.plot(x, revc[:, 1], label='REVC')
+    plt.plot(x, dmtrevc[:, 1], label='DMTREVC')
+    plt.legend()
+    plt.title(title)
+    plt.savefig(f"plots/{what}.svg", format="svg")
+    plt.clf()
+    plt.cla()
 
-# ax2 = ax1.twinx()
-#
-# color = 'tab:blue'
-# ax2.set_ylabel('Unique Errors', color=color)  # we already handled the x-label with ax1
-# ax2.plot(random_iter, random_errors, color=color, label='random')
-# ax2.tick_params(axis='y', labelcolor=color)
-# color = 'tab:green'
-# ax2.plot(symbolic_iter, symbolic_errors, color=color, label='symbolic')
-# ax2.legend(loc='lower right')
 
-plt.title("Clock's execution time vs number of processes")
-plt.show()
+plot('time', 'Number of processes', 'Time (s)', "Clock's execution time vs number of processes")
+plot('bitsizes', 'Number of events', 'Number of bits', "Growth in the size of the clocks")

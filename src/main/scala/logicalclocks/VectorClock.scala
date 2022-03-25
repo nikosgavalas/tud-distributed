@@ -74,4 +74,8 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
     override def toString: String = {
         me + ": " + vector.mkString("(", ", ", ")")
     }
+
+    override def getSizeBits: Int = {
+        vector.length * 32
+    }
 }

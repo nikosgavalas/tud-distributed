@@ -39,4 +39,8 @@ class EncVectorClock(me: Int, n: Int) extends LogicalClock {
             return Concurrent
         }
      }
+
+    override def getSizeBits: Int = {
+        scalar.bitLength
+    }
 }

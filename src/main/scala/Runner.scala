@@ -9,14 +9,16 @@ import scala.util.Random
 object Config {
     val doWork: Boolean = false
     val maxWorkTime: Int = 20
-    val maxMessagesPerChild: Int = 10000
+    val debug: Boolean = true  // akka ignores the loglevel config for some reason so we 'll do it "manually"
 }
 
 object ChildActor {
     sealed trait Message
 
     // messages from the parent
-    final case class ControlMessage(peers: List[ActorRef[ChildActor.Message]],
+    final case class ControlMessage(printBitsizes: Boolean,
+                                    maxMessagesPerChild: Int,
+                                    peers: List[ActorRef[ChildActor.Message]],
                                     parentActor: ActorRef[ParentActor.Message],
                                     childIndex: Int,
                                     selectedClocks: List[String]
@@ -45,6 +47,8 @@ object ChildActor {
     def apply(): Behavior[Message] = Behaviors.setup { context =>
         var myIndex: Int = -1
         var messageCounter: Int = 0
+        var printBits = false
+        var maxMessages = 1
         var parentActor: ActorRef[ParentActor.Message] = null
 
         var clocks: ClocksWrapper = null
@@ -54,15 +58,17 @@ object ChildActor {
 
         Behaviors.receive { (context, message) =>
             message match {
-                case ControlMessage(peers, parent, childIndex, selectedClocks) =>
+                case ControlMessage(printBitsizes, maxMessagesPerChild, peers, parent, childIndex, selectedClocks) =>
+                    // store the configs
+                    printBits = printBitsizes
                     allPeers = peers
+                    maxMessages = maxMessagesPerChild
                     parentActor = parent
                     myIndex = childIndex
                     selectedClocksList = selectedClocks
 
                     // each actor initializes their clocks
                     clocks = new ClocksWrapper(myIndex, peers.length, selectedClocksList)
-                    println(clocks.getMemorySizes())
 
                     context.log.debug(s"${context.self.path.name} received peers $peers")
 
@@ -71,7 +77,10 @@ object ChildActor {
                     allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps)
 
                 case PeerMessage(content, timestamps) =>
-                    context.log.debug(s"${context.self.path.name} received '$content' with timestamps: ${selectedClocksList.zip(timestamps)}")
+                    if (Config.debug) {
+                        context.log.debug(s"${context.self.path.name} received '$content' with timestamps: ${selectedClocksList.zip(timestamps)}")
+                        context.log.debug(s"${selectedClocksList.zip(clocks.getMemSizes)}")
+                    }
 
                     // merge and tick
                     clocks.merge(timestamps)
@@ -96,7 +105,11 @@ object ChildActor {
 
                     messageCounter += 1
 
-                    if (messageCounter == Config.maxMessagesPerChild) {
+                    // only the first child logs its bitsizes
+                    if (printBits && myIndex == 1)
+                        println(s"eventnum/bitsize: $messageCounter ${clocks.getMemSizes.sum}")
+
+                    if (messageCounter == maxMessages) {
                         parentActor ! ParentActor.ChildDone()
                     }
             }
@@ -109,7 +122,10 @@ object ChildActor {
 object ParentActor {
     sealed trait Message
 
-    final case class SpawnActors(number: Int, selectedClocks: List[String]) extends Message
+    final case class SpawnActors(printBitsizes: Boolean,
+                                 maxMessagesPerChild: Int,
+                                 nActors: Int,
+                                 selectedClocks: List[String]) extends Message
 
     final case class ChildDone() extends Message
 
@@ -121,8 +137,8 @@ object ParentActor {
 
         Behaviors.receive { (context, message) =>
             message match {
-                case SpawnActors(number, selectedClocks) =>
-                    numberOfChildren = number
+                case SpawnActors(printBitsizes, maxMessagesPerChild, nActors, selectedClocks) =>
+                    numberOfChildren = nActors
 
                     // upon receiving the message, spawn the children
                     processList = (0 until numberOfChildren)
@@ -130,7 +146,8 @@ object ParentActor {
 
                     // send relevant information to each child
                     processList.zip(0 until numberOfChildren).foreach{case (child, childIndex) =>
-                        child ! ControlMessage(processList, context.self, childIndex, selectedClocks)}
+                        child ! ControlMessage(printBitsizes, maxMessagesPerChild, processList, context.self,
+                            childIndex, selectedClocks)}
 
                     // send a BeginMessage to the first child to trigger the message deliveries
                     processList.head ! BeginMessage()
@@ -153,17 +170,19 @@ object ParentActor {
 
 object Main extends App {
 
-    if (args.length < 2) {
-        println(s"Run with arguments: <number of actors> <clocks separated with commas>")
+    if (args.length < 4) {
+        println("Run with arguments: <print bitsizes: true/false> <number of messages per child: int> <number of actors: int> <clocks separated with commas: str>")
         sys.exit(1)
     }
-    val nActors: Int = args(0).toInt
-    val selectedClocks: List[String] = args(1).split(",").toList.sorted
-    println(s"Starting execution with $nActors actors and $selectedClocks clocks")
+    val printBitsizes: Boolean = args(0).toBoolean
+    val maxMessagesPerChild: Int = args(1).toInt
+    val nActors: Int = args(2).toInt
+    val selectedClocks: List[String] = args(3).split(",").toList.sorted
+    println(s"Starting execution with: $printBitsizes bitsize output, $maxMessagesPerChild messages, $nActors actors and $selectedClocks clocks")
 
     // start the actor system
     val parentActor: ActorSystem[ParentActor.SpawnActors] = ActorSystem(ParentActor(), "Main")
 
     // send a message to ParentActor to spawn children
-    parentActor ! SpawnActors(nActors, selectedClocks)
+    parentActor ! SpawnActors(printBitsizes, maxMessagesPerChild, nActors, selectedClocks)
 }

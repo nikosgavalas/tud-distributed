@@ -102,4 +102,11 @@ class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
         frame += 1 
         scalar = newScalarValue
     }
+
+    override def getSizeBits: Int = {
+        val scalarSize = scalar.bitLength
+        val frameSize = 32
+        val frameHistSize = frameHistory.map{ case (_, bigint) => 32 + bigint.bitLength }.sum
+        scalarSize + frameSize + frameHistSize
+    }
 }
