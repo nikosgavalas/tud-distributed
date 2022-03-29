@@ -9,7 +9,7 @@ import scala.util.Random
 object Config {
     val doWork: Boolean = false
     val maxWorkTime: Int = 20
-    val debug: Boolean = true  // akka ignores the loglevel config for some reason so we 'll do it "manually"
+    val debug: Boolean = false  // akka ignores the loglevel config for some reason so we 'll do it "manually"
 }
 
 object ChildActor {
@@ -169,6 +169,7 @@ object ParentActor {
 }
 
 object Main extends App {
+    // Random.setSeed(1)
 
     if (args.length < 4) {
         println("Run with arguments: <print bitsizes: true/false> <number of messages per child: int> <number of actors: int> <clocks separated with commas: str>")
