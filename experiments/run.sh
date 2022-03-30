@@ -3,7 +3,7 @@
 # spawned actors (which corresponds to the number of processes for the experiments)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JAR='target/scala-2.13/revc-implementation-assembly-0.1.0-SNAPSHOT.jar'
+JAR="$SCRIPT_DIR/../target/scala-2.13/revc-implementation-assembly-0.1.0-SNAPSHOT.jar"
 CSV_DIR="$SCRIPT_DIR/csv"
 CLOCKS=( "VC" "EVC" "REVC" "DMTREVC" )
 
