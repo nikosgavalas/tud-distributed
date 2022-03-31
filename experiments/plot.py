@@ -2,6 +2,8 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+pd.set_option('display.max_rows', 500)
+
 
 def plot(what, x, y, title):
     colnames = ['run', x, y]
@@ -20,22 +22,25 @@ def plot(what, x, y, title):
 
     s = sns.lineplot(data=df, x=colnames[1], y=colnames[2], hue='Clock').set_title(title) #, err_style='bars')
     fig = s.get_figure()
-    fig.savefig(f'plots/{what}.svg')
+    fig.savefig(f'plots/{what}.png')
     plt.clf()
     plt.cla()
 
     return df
 
 
-def print_stats(df, clock):
+def print_stats(df, group, key, clock):
     print(f'\n{clock} clock stats:')
-    print(df[df['Clock'] == clock].groupby('Number of processes')['Time (s)'].describe())
-
+    print(df[df['Clock'] == clock].groupby(group)[key].describe())
 
 df = plot('time', 'Number of processes', 'Time (s)', 'Time of execution vs Number of processes, @95% conf. int.')
-plot('bitsizes', 'Events', 'Size in bits', 'Size in bits vs Number of events per process, @95% conf. int.')
+print_stats(df, 'Number of processes', 'Time (s)', 'VC')
+print_stats(df, 'Number of processes', 'Time (s)', 'EVC')
+print_stats(df, 'Number of processes', 'Time (s)', 'REVC')
+print_stats(df, 'Number of processes', 'Time (s)', 'DMTREVC')
 
-print_stats(df, 'VC')
-print_stats(df, 'EVC')
-print_stats(df, 'REVC')
-print_stats(df, 'DMTREVC')
+df = plot('bitsizes', 'Events', 'Size in bits', 'Size in bits vs Number of events per process, @95% conf. int.')
+print_stats(df, 'Events', 'Size in bits', 'VC')
+print_stats(df, 'Events', 'Size in bits', 'EVC')
+print_stats(df, 'Events', 'Size in bits', 'REVC')
+print_stats(df, 'Events', 'Size in bits', 'DMTREVC')

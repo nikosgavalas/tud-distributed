@@ -47,4 +47,4 @@ done
 
 cd "$SCRIPT_DIR" || { echo "cd failed"; exit 1; }
 
-python plot.py
+python plot.py # > "$SCRIPT_DIR/descriptive_stats.txt"
