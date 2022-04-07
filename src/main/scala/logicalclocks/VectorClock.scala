@@ -1,21 +1,47 @@
 package logicalclocks
 
-class VectorClock(me: Int, n: Int) extends LogicalClock {
-    type Rep = List[Int]
-
-    private val vector = Array.fill(n)(0)
-
-    def getTimestamp() : Rep = {
-        vector.clone.toList
+/** The timestamp of VectorClock is represented by 
+ *  a list of integers, where each integer corresponds
+ *  to a vector clock instance.
+ */
+class VCTimestamp(vector: List[Int]) extends LCTimestamp  {
+    def getVector() : List[Int] = {
+        return vector
     }
+}
 
-    def localTick(): Unit = {
+/** VectorClock is an implementation of the vector clock.
+ */
+class VectorClock(me: Int, n: Int) extends LogicalClock {
+
+    /** Current clock value.
+     */
+    protected val vector = Array.fill(n)(0)
+
+    /** Returns a timestamp of the current state.
+     * 
+     *  @param receiver the receiver of the timestamp, which 
+     *  is not relevant for the VectorClock implementation
+     *  @return a copy of the current vector clock list
+     */
+    override def getTimestamp(receiver: Int) : LCTimestamp = {
+        return new VCTimestamp(vector.clone.toList)
+    }
+    
+    /** Increments the value of this clock in the 
+     *  vector clock list.
+     */
+    override def localTick(): Unit = {
         vector(me) = vector(me) + 1
     }
 
-    def mergeWith(merge: Any) : Unit = {
-        val mergeVector = merge.asInstanceOf[Rep]
-        assert(mergeVector.length == n)
+    /** Updates the vector clock list by merging timestamp 
+     *  x into the clock.
+     * 
+     *  @param x the timestamp to be merged into the clock
+     */ 
+    override def mergeWith(mergeTimestamp: LCTimestamp) : Unit = {
+        val mergeVector = mergeTimestamp.asInstanceOf[VCTimestamp].getVector()
 
         for (i <- 0 until n) {
             // Merge vectors component-wise
@@ -23,59 +49,35 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-    def compareWith(compare: Any): Boolean = {
-        val otherVector = compare.asInstanceOf[Rep]
-        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
-        return List(Before, BeforeEqual, Same).contains(getOrdering(otherVector))
-    }
-
-    def getOrdering(otherVector: Rep): TimestampOrdering = { 
-        assert(otherVector.length == n)
-        
-        // Initialize current ordering with first element of vectors
-        var curOrdering : TimestampOrdering = null
-        if (vector(0) < otherVector(0)) {
-            curOrdering = Before 
-        } else if (vector(0) > otherVector(0)) {
-            curOrdering = After 
-        } else {
-            curOrdering = Same
-        }
-
-        for (i <- 1 until n) {
-            curOrdering match {
-                case Before | BeforeEqual => {
-                    if (vector(i) > otherVector(i)) {
-                        return Concurrent
-                    } else if (vector(i) == otherVector(i)) {
-                        curOrdering = BeforeEqual
-                    }
-                }
-                case After | AfterEqual => {
-                    if (vector(i) < otherVector(i)) {
-                        return Concurrent
-                    } else if (vector(i) == otherVector(i)) {
-                        curOrdering = AfterEqual
-                    }
-                } 
-                case Same => {
-                    if (vector(i) < otherVector(i)) {
-                        curOrdering = BeforeEqual
-                    } else if (vector(i) > otherVector(i)) {
-                        curOrdering = AfterEqual
-                    }
-                }
+    /** Returns whether the current clock value is logically before, 
+     *  beforeEqual or equal to the passed timestamp compareTimestamp. 
+     * 
+     *  @param compareTimestamp the timestamp to be compared with the clock
+     *  @return whether the current clock value happened before x
+     */ 
+    override def happenedBefore(compareTimestamp: LCTimestamp): Boolean = {
+        val otherVector = compareTimestamp.asInstanceOf[VCTimestamp].getVector()
+        for (i <- 0 until otherVector.length) {
+            if (otherVector(i) > vector(i)) {
+                return false
             }
         }
 
-        curOrdering
+        return true
     }
 
+    /** Converts the current vector clock value to a string.
+     *  @return a string representation of the current vector clock value
+     */ 
     override def toString: String = {
-        me + ": " + vector.mkString("(", ", ", ")")
+        return me + ": " + vector.mkString("(", ", ", ")")
     }
 
+    /** Returns the number of bits needed to represent the timestamp of the clock.
+     * 
+     *  @return the number of bits needed to represent the timestamp of this clock
+     */ 
     override def getSizeBits: Int = {
-        vector.length * 32
+        return vector.length * 32
     }
 }

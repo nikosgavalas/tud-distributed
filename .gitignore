@@ -6,3 +6,5 @@ target/*
 .bloop/*
 .metals/*
 .bsp/*
+project/.bloop/bloop.settings.json
+project/.bloop/tud-distributed-build.json

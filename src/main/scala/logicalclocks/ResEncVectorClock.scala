@@ -1,32 +1,59 @@
 package logicalclocks
 
-case class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt])
+/** The timestamp of ResEncVectorClock is represented by 
+ *  an REVCTimestamp, which consists of a BigInt for the 
+ *  scalar, a integer for the frame number, and a mapping 
+ *  from integers to BigIntegers for the frame history.
+ */
+class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt]) extends EVCTimestamp(scalar) {
+    def getFrame() : Int = {
+        return frame
+    }
 
-class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
-    type Rep = REVCTimestamp
+    def getFrameHistory() : Map[Int, BigInt] = {
+        return frameHistory
+    }
+}
 
-    // Prime assigned to this clock
-    private val myPrime : Int = Primes.getPrime(me)
+/** ResEncVectorClock is an implementation of the resettable 
+ *  encoded vector clock. (See 
+ *  https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9234035)
+ */
+class ResEncVectorClock(me: Int, n: Int) extends EncVectorClock(me, n) {
 
-    // Current representation of REVC
-    private var scalar : BigInt = 1
-    private var frame : Int = 0 
-    private val frameHistory = scala.collection.mutable.Map[Int, BigInt]()
+    /** Additional variables to represent the current clock value.
+     *  We inherit the scalar from the EVC implementation.
+     */
+    protected var frame : Int = 0 
+    protected val frameHistory = scala.collection.mutable.Map[Int, BigInt]()
 
-    // Max size for scalar to indicate overflows
-    private val bitsToOverflow : Int = 16 
+    /** Max size for scalar to indicate overflows.
+     *  The minimum value for this number is 
+     */
+    protected val bitsToOverflow : Int = 16 
 
-    def getTimestamp(): Rep = {
-        // Saves current representation of REVC into an immutable timestamp
-
+    /** Returns a timestamp of the current state.
+     *  Note: we have to copy frameHistory to avoid 
+     *  referencing issues.
+     *  
+     *  @param receiver the receiver of the timestamp, which 
+     *  is not relevant for the REVC implementation
+     *  @return the current scalar and frameHistory
+     */
+    override def getTimestamp(receiver: Int): LCTimestamp = {
         // Copy frameHistory to an immutable Map
         var frameHistoryCopy = Map[Int, BigInt](frameHistory.toSeq: _*)
 
         // Create and return new timestamp
-        new REVCTimestamp(scalar, frame, frameHistoryCopy)
+        return new REVCTimestamp(scalar, frame, frameHistoryCopy)
     }
 
-    def localTick(): Unit = {
+    /** Increments the value of this clock in the 
+     *  scalar by multiplying by the assigned prime.
+     *  In case this multiplication causes an overflow, 
+     *  we reset the scalar. 
+     */
+    override def localTick(): Unit = {
         val temp = scalar * myPrime
         if (causesOverflow(temp)) {
             reset(myPrime)
@@ -35,78 +62,134 @@ class ResEncVectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-    def mergeWith(merge: Any) : Unit = {
-        val revcTimestamp = merge.asInstanceOf[Rep]
-        val otherScalar = revcTimestamp.scalar
-        val otherFrame = revcTimestamp.frame 
-        val otherFrameHistory = revcTimestamp.frameHistory
-        
-        def mergeScalars(s1: BigInt, s2: BigInt) : BigInt = {
-            // Returns LCM of two scalars
-            (s1 * s2) / s1.gcd(s2)
-        }
+    /** Updates the scalar, frame and frameHistory by 
+     *  merging the timestamp into the clock.
+     * 
+     *  Note: mergeTimestamp is of LCTimestamp type because 
+     *  ClocksWrapper and Runner can not enforce 
+     *  the correct type of the timestamp.
+     * 
+     *  @param mergeTimestamp the timestamp to be merged into the clock
+     */ 
+    override def mergeWith(mergeTimestamp: LCTimestamp) : Unit = {
+        val otherTimestamp = mergeTimestamp.asInstanceOf[REVCTimestamp]
+        scalarFrameMerge(otherTimestamp)
+        historyMerge(otherTimestamp)
+    }
 
-        def historyMerge() : Unit = {
-            // Merges frameHistory with otherFrameHistory
+    /** Returns whether the current clock value is logically before 
+     *  the passed timestamp.
+     * 
+     *  @param compareTimestamp the timestamp to be compared with the clock
+     *  @return whether the current clock value happened before x
+     */ 
+    override def happenedBefore(compareTimestamp : LCTimestamp) : Boolean = {
+        val otherTimestamp = compareTimestamp.asInstanceOf[REVCTimestamp]
+        val otherScalar = otherTimestamp.getScalar() 
+        val otherFrame = otherTimestamp.getFrame() 
+        val otherFrameHistory = otherTimestamp.getFrameHistory()
 
-            for ((tempFrame, tempScalar) <- otherFrameHistory) {
-                if (frameHistory.contains(tempFrame)) {
-                    // Update tempFrame value in frameHistory
-                    frameHistory += (tempFrame -> mergeScalars(frameHistory.getOrElse(tempFrame, 0), tempScalar))
-                } else {
-                    // Add tempFrame to frameHistory
-                    frameHistory += (tempFrame -> tempScalar)
-                }
-            }
+        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
+        if (frame > otherFrame) {
+            return false 
+        } else {
+            val scalarToCompare = otherFrameHistory.getOrElse(frame, otherScalar)
+            return (scalar <= scalarToCompare && scalarToCompare % scalar == 0)
         }
+    }
+
+    /** Updates the scalar and frame by merging the timestamp
+     *  into the clock.
+     * 
+     *  @param otherTimestamp the timestamp to be merged into the clock
+     */ 
+    protected def scalarFrameMerge(otherTimestamp : REVCTimestamp) : Unit = {
+        val otherScalar = otherTimestamp.getScalar() 
+        val otherFrame = otherTimestamp.getFrame()
 
         if (frame > otherFrame) {
-            frameHistory += (otherFrame -> mergeScalars(frameHistory.getOrElse(otherFrame, 0), otherScalar))
-            historyMerge()
+            addToFrameHistory(otherFrame, getLCM(frameHistory.getOrElse(otherFrame, 0), otherScalar))
         } else if (otherFrame > frame) {
-            frameHistory += (frame -> scalar)
-            frame = otherFrame 
+            addToFrameHistory(frame, scalar)
+            frame = otherFrame
             scalar = otherScalar
-            historyMerge()
         } else {
-            val temp = mergeScalars(scalar, otherScalar)
+            val temp = getLCM(scalar, otherScalar)
             if (causesOverflow(temp)) {
                 reset(1)
             } else {
                 scalar = temp
             }
-            historyMerge()
+        }
+    }
+    
+    /** Updates the frame history by merging the timestamp
+     *  into the clock.
+     * 
+     *  @param otherTimestamp the timestamp to be merged into the clock
+     */ 
+    protected def historyMerge(otherTimestamp : REVCTimestamp) : Unit = {
+        val otherFrameHistory = otherTimestamp.getFrameHistory()
+
+        for ((tempFrame, tempScalar) <- otherFrameHistory) {
+            if (frameHistory.contains(tempFrame)) {
+                // Update tempFrame value in frameHistory
+                addToFrameHistory(tempFrame, getLCM(frameHistory.getOrElse(tempFrame, 0), tempScalar))
+            } else {
+                // Add tempFrame to frameHistory
+                addToFrameHistory(tempFrame, tempScalar)
+            }
         }
     }
 
-    def compareWith(compare : Any) : Boolean = {
-        val t2 = compare.asInstanceOf[Rep]
-
-        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
-        if (frame > t2.frame) {
-            return false 
-        } else {
-            val scalarToCompare = t2.frameHistory.getOrElse(frame, t2.scalar)
-            return (scalar <= scalarToCompare && scalarToCompare % scalar == 0)
-        }
+    /** Adds the frameIndex and value to the frameHistory map.
+     * 
+     *  @param frameIndex the key for the new frameHistory entry 
+     *  @param value the value for the new frameHistory entry
+     */
+    protected def addToFrameHistory(frameIndex: Int, value : BigInt): Unit = {
+        frameHistory += (frameIndex -> value)
     }
 
-    def causesOverflow(toCheck: BigInt) : Boolean = {
+    /** Returns whether the number of bits needed to represent 
+     *  the passed scalar value exceeds the predefined maximum 
+     *  amount of bits (bitsToOverflow).
+     * 
+     *  @param toCheck the scalar value to check for overflow
+     *  @return true if toCheck needs more than bitsToOverflow bits
+     */
+    protected def causesOverflow(toCheck: BigInt) : Boolean = {
         // Returns whether toCheck causes an overflow
         return (toCheck.bitLength > bitsToOverflow)
     }
-
-    def reset(newScalarValue: BigInt) : Unit = {
+    
+    /** Resets the REVC.
+     * 
+     *  The current scalar gets moved to the frame history, the frame 
+     *  number gets incremented, and the passed scalar becomes the 
+     *  new current scalar.
+     * 
+     *  @param newScalarValue the starting value for the new scalar
+     */ 
+    protected def reset(newScalarValue: BigInt) : Unit = {
         // Resets current representation of REVC 
-        frameHistory += (frame -> scalar)
+        addToFrameHistory(frame, scalar)
         frame += 1 
         scalar = newScalarValue
     }
 
+    /** Returns the number of bits needed to represent the timestamp of the clock. 
+     *  
+     *  Note that in the REVC we use the scalar in the EVC, with an additional frame 
+     *  and frameHistory defined in the REVC. Hence, we use the getSizeBits of the 
+     *  EVC, and add it to the number of bits needed.
+     * 
+     *  @return the number of bits needed to represent the timestamp of this clock
+     */ 
     override def getSizeBits: Int = {
-        val scalarSize = scalar.bitLength
+        val evcSize = super.getSizeBits
         val frameSize = 32
         val frameHistSize = frameHistory.map{ case (_, bigint) => 32 + bigint.bitLength }.sum
-        scalarSize + frameSize + frameHistSize
+        return evcSize + frameSize + frameHistSize
     }
 }

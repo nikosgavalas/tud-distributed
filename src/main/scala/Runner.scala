@@ -1,8 +1,9 @@
+import logicalclocks.LCTimestamp
+
 import ChildActor.{BeginMessage, ControlMessage}
 import ParentActor.SpawnActors
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import logicalclocks.DMTResEncVectorClock
 
 import scala.util.Random
 
@@ -25,7 +26,7 @@ object ChildActor {
                                    ) extends Message
 
     // messages to/from other children
-    final case class PeerMessage(content: String, timestamps: List[Any]) extends Message
+    final case class PeerMessage(content: String, timestamps: List[LCTimestamp]) extends Message
 
     // message from the parent that signals the start of message deliveries
     final case class BeginMessage() extends Message
@@ -74,7 +75,7 @@ object ChildActor {
 
                 case BeginMessage() =>
                     clocks.tick()
-                    allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps)
+                    allPeers(1) ! PeerMessage("init msg", clocks.getTimestamps(1))
 
                 case PeerMessage(content, timestamps) =>
                     if (Config.debug) {
@@ -97,11 +98,7 @@ object ChildActor {
                     // tick and send to a randomly selected peer
                     clocks.tick()
                     val receivingPeer = Random.between(0, allPeers.length)
-                    allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps)
-                    // for the DMTREVC specifically, we need to also call mergedInto
-                    if (selectedClocksList.contains("DMTREVC")) {
-                        clocks.getClock("DMTREVC").asInstanceOf[DMTResEncVectorClock].mergedInto(receivingPeer)
-                    }
+                    allPeers(receivingPeer) ! PeerMessage("msg", clocks.getTimestamps(receivingPeer))
 
                     messageCounter += 1
 

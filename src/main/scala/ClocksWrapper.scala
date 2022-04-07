@@ -1,4 +1,4 @@
-import logicalclocks.{DMTResEncVectorClock, EncVectorClock, LogicalClock, ResEncVectorClock, VectorClock}
+import logicalclocks.{LCTimestamp, DMTResEncVectorClock, EncVectorClock, LogicalClock, ResEncVectorClock, VectorClock}
 
 import scala.collection.mutable
 
@@ -22,16 +22,16 @@ class ClocksWrapper(index: Int, numPeers: Int, selectedClocks: List[String]) {
         clocks.foreach{ case (_, clock) => clock.localTick() }
     }
 
-    def getTimestamps: List[Any] = {
-        clocks.map{ case (_, clock) => clock.getTimestamp() }.toList
+    def getTimestamps(receiver: Int): List[LCTimestamp] = {
+        clocks.map{ case (_, clock) => clock.getTimestamp(receiver) }.toList
     }
 
-    def merge(timestamps: List[Any]): Unit = {
+    def merge(timestamps: List[LCTimestamp]): Unit = {
         clocks.zip(timestamps).foreach{ case ((_, clock), timestamp) => clock.mergeWith(timestamp) }
     }
 
-    def allConsistent(timestamps: List[Any]): Boolean = {
-        val checks = clocks.zip(timestamps).map{ case ((_, clock), timestamp) => clock.compareWith(timestamp) }.toList
+    def allConsistent(timestamps: List[LCTimestamp]): Boolean = {
+        val checks = clocks.zip(timestamps).map{ case ((_, clock), timestamp) => clock.happenedBefore(timestamp) }.toList
         val all_true = checks.reduce((i, j) => i && j)
         val all_false = ! checks.reduce((i, j) => i || j)
         all_true || all_false
