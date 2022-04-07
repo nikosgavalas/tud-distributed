@@ -13,7 +13,7 @@ class EVCTimestamp(scalar: BigInt) extends LCTimestamp  {
  *  vector clock. (See 
  *  https://dl.acm.org/doi/abs/10.1145/3154273.3154305)
  */
-class EncVectorClock(me: Int, n: Int) extends LogicalClock {
+class EncVectorClock(me: Int) extends LogicalClock {
     
     /** The unique prime given to this instance of 
      *  EncVectorClock.

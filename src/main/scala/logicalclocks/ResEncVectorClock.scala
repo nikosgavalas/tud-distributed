@@ -19,7 +19,7 @@ class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt]) 
  *  encoded vector clock. (See 
  *  https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9234035)
  */
-class ResEncVectorClock(me: Int, n: Int) extends EncVectorClock(me, n) {
+class ResEncVectorClock(me: Int) extends EncVectorClock(me, n) {
 
     /** Additional variables to represent the current clock value.
      *  We inherit the scalar from the EVC implementation.
@@ -89,7 +89,7 @@ class ResEncVectorClock(me: Int, n: Int) extends EncVectorClock(me, n) {
         val otherFrame = otherTimestamp.getFrame() 
         val otherFrameHistory = otherTimestamp.getFrameHistory()
 
-        // Returns true if logicalclocks.Before, logicalclocks.BeforeEqual or logicalclocks.Same
+        // Returns true if Before, BeforeEqual or Equal
         if (frame > otherFrame) {
             return false 
         } else {

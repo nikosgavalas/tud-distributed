@@ -8,11 +8,11 @@ class ClocksWrapper(index: Int, numPeers: Int, selectedClocks: List[String]) {
     if (selectedClocks.contains("VC"))
         clocks.addOne(("VC", new VectorClock(index, numPeers)))
     if (selectedClocks.contains("EVC"))
-        clocks.addOne(("EVC", new EncVectorClock(index, numPeers)))
+        clocks.addOne(("EVC", new EncVectorClock(index)))
     if (selectedClocks.contains("REVC"))
-        clocks.addOne(("REVC", new ResEncVectorClock(index, numPeers)))
+        clocks.addOne(("REVC", new ResEncVectorClock(index)))
     if (selectedClocks.contains("DMTREVC"))
-        clocks.addOne(("DMTREVC", new DMTResEncVectorClock(index, numPeers)))
+        clocks.addOne(("DMTREVC", new DMTResEncVectorClock(index)))
 
     def getClock(clockStr: String): LogicalClock = {
         clocks(clockStr)
