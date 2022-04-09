@@ -1,17 +1,20 @@
 package logicalclocks
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.Set 
+import scala.collection.mutable.Buffer
 
 /** The timestamp of DMTResEncVectorClock is represented by 
  *  an DMTREVCTimestamp, which consists of a BigInt for the 
  *  scalar, a integer for the frame number, a mapping 
- *  from integers to BigIntegers for the frame history, 
- *  and a mapping from integers to lists for the differences.
+ *  from integers to BigInts for the frame history, 
+ *  and a list of integers representing the frame numbers that 
+ *  have been changed since the last merge with the clock 
+ *  for which the timestamp has been made. 
  */
-class DMTREVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt], differences: Map[Int, List[Int]]) 
+class DMTREVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt], differences: Set[Int]) 
         extends REVCTimestamp(scalar, frame, frameHistory) {
 
-    def getDifferences() : Map[Int, List[Int]] = {
+    def getDifferences() : Set[Int] = {
         return differences
     }
 }
@@ -24,52 +27,48 @@ class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
 
     /** Keep track of latest merged frame from each of the other clocks.
      */
-    protected val differences = scala.collection.mutable.Map[Int, scala.collection.mutable.ArrayBuffer[Int]]()
-    for (i <- 0 until n) {
-        differences += (i -> ArrayBuffer[Int]())
-    }
+    protected val differencesPerPeer = scala.collection.mutable.Buffer.fill(n)(Set[Int]())
 
     /** Returns a timestamp of the current state.
-     *  Note: scalar is passed by value, so we 
-     *  can not encounter referencing issues.
+     *  Note: if we get a timestamp for a particular receiver
+     *  we assume the timestamp will be merged into the receiver, 
+     *  so we empty the list in differencesPerPeer for the receiver.
      *  
-     *  @param receiver the receiver of the timestamp, which 
-     *  is not relevant for the REVC implementation
-     *  @return the current scalar
+     *  @param receiver the receiver of the timestamp, where -1 represents no receiver
+     *  @return a DMTREVCTimestamp of the current clock state personalized for the receiver
      */
-    override def getTimestamp(receiver: Int): LCTimestamp = {
-        // Copy frameHistory to an immutable Map
-        val revcTimestamp = super.getTimestamp(receiver).asInstanceOf[REVCTimestamp]
-        val differencesImmutable = scala.collection.mutable.Map[Int, List[Int]]()
-        for ((tempFrame, tempBuffer) <- differences) {
-            differencesImmutable += (tempFrame -> tempBuffer.toList)
-        }
-        var differencesCopy = Map[Int, List[Int]](differencesImmutable.toList: _*)
+    override def getTimestamp(receiver: Int = -1): LCTimestamp = {
+        // Copy differences to immutable map
+        val differences = differencesPerPeer(receiver).clone
         
-        // Reset differences for the receiver
-        differences += (receiver -> ArrayBuffer[Int]())
+        if (receiver == -1) {
+            // Reset differencesPerPeer for the receiver
+            differencesPerPeer(receiver) = Set[Int]() 
+        }
+
+        // Get timestamp created by REVC parent
+        val revcTimestamp = super.getTimestamp(receiver).asInstanceOf[REVCTimestamp]
 
         // Create and return new timestamp
         return new DMTREVCTimestamp(revcTimestamp.getScalar(), revcTimestamp.getFrame(),
-            revcTimestamp.getFrameHistory(), differencesCopy)
+            revcTimestamp.getFrameHistory(), differences)
     }
 
     /** Updates the frame history by merging the timestamp
      *  into the clock.
      *  
-     *  Note that we are reusing REVC.mergeWith as a template function 
-     *  which means this function will be passed an REVCTimestamp instead 
-     *  of a DMTREVCTimestamp. Hence, we will first have to downcast.
+     *  Note that we are reusing REVC.mergeWith as a template function, 
+     *  so we only have to implement historyMerge.
      *  
-     *  @param otherTimestamp the timestamp to be merged into the clock
+     *  @param otherTimestamp the timestamp to be merged into the clock. 
      */ 
-    def historyMerge(otherTimestamp : DMTREVCTimestamp) : Unit = {
-        val dmtOtherTimestamp = otherTimestamp.asInstanceOf[DMTREVCTimestamp]
-        val otherFrameHistory = dmtOtherTimestamp.getFrameHistory()
-        val otherDifferences = dmtOtherTimestamp.getDifferences()
+    override def historyMerge(otherTimestamp : REVCTimestamp) : Unit = {
+        val otherDMTTimestamp : DMTREVCTimestamp = otherTimestamp.asInstanceOf[DMTREVCTimestamp]
+        val otherFrameHistory = otherDMTTimestamp.getFrameHistory()
+        val otherDifferences = otherDMTTimestamp.getDifferences()
 
-        // Differential merge
-        for (tempFrame <- otherDifferences.getOrElse(me, otherFrameHistory.keys)) {
+        // Differential merge: only loop through changed frames
+        for (tempFrame <- otherDifferences) {
             val tempScalar = otherFrameHistory.getOrElse(tempFrame, BigInt(-1))
             if (frameHistory.contains(tempFrame)) {
                 // Update tempFrame value in frameHistory
@@ -98,12 +97,11 @@ class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
         val newValue = frameHistory.getOrElse(frameIndex, -1)
 
         if (oldValue != newValue) {
-            // Update differences map 
-            for ((otherIndex, otherList) <- differences) {
-                if (!otherList.contains(frameIndex)) {
-                    otherList += frameIndex
-                    differences += (otherIndex -> otherList)
-                }
+            // Update differencesPerPeer map 
+            for (i <- 0 until n) {
+                var otherSet = differencesPerPeer(i)
+                otherSet += frameIndex
+                differencesPerPeer(i) = otherSet
             }
         } 
     }
@@ -111,9 +109,9 @@ class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
     /** Returns the number of bits needed to represent the timestamp of the clock. 
      *  
      *  Note that in the REVC we use the scalar in the EVC, with an additional frame 
-     *  and frameHistory defined in the REVC. In the DMTREVC we add the differences map. 
+     *  and frameHistory defined in the REVC. In the DMTREVC we add the differencesPerPeer map. 
      *  Hence, we use the getSizeBits of the REVC, and add it to the number of bits needed
-     *  to represent the differences map.
+     *  to represent the differencesPerPeer map.
      * 
      *  @return the number of bits needed to represent the timestamp of this clock
      */ 
@@ -121,7 +119,7 @@ class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
         val revcSize = super.getSizeBits
 
         // the size of a list is 32 bits, plus the number of elements * 32 bits
-        val diffsSize = differences.map{ case (_, intlist) => 32 + intlist.length * 32 }.sum
+        val diffsSize = differencesPerPeer.map{ case (set) => 32 + set.size * 32 }.sum / n
 
         return revcSize + diffsSize
     }
