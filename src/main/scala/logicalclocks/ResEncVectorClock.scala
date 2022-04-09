@@ -70,9 +70,9 @@ class ResEncVectorClock(me: Int, n : Int) extends EncVectorClock(me, n) {
      *  @param mergeTimestamp the timestamp to be merged into the clock
      */ 
     override def mergeWith(mergeTimestamp: LCTimestamp) : Unit = {
-        val mergeTimestamp : REVCTimestamp = mergeTimestamp.asInstanceOf[REVCTimestamp]
-        scalarFrameMerge(mergeTimestamp)
-        historyMerge(mergeTimestamp)
+        val mergeREVCTimestamp : REVCTimestamp = mergeTimestamp.asInstanceOf[REVCTimestamp]
+        scalarFrameMerge(mergeREVCTimestamp)
+        historyMerge(mergeREVCTimestamp)
     }
 
     /** Updates the scalar and frame by merging the timestamp
@@ -80,8 +80,7 @@ class ResEncVectorClock(me: Int, n : Int) extends EncVectorClock(me, n) {
      * 
      *  @param otherTimestamp the timestamp to be merged into the clock
      */ 
-    protected def scalarFrameMerge(otherTimestamp : LCTimestamp) : Unit = {
-        val otherTimestamp : REVCTimestamp = otherTimestamp.asInstanceOf[REVCTimestamp]
+    protected def scalarFrameMerge(otherTimestamp : REVCTimestamp) : Unit = {
         val otherScalar = otherTimestamp.getScalar() 
         val otherFrame = otherTimestamp.getFrame()
 
@@ -185,19 +184,16 @@ object ResEncVectorClock extends LogicalClockComparator {
      *  @return whether the timestamp1 happened before timestamp 2
      */ 
     def happenedBefore(timestamp1: LCTimestamp, timestamp2: LCTimestamp) : Boolean = {
-        val timestamp1 : REVCTimestamp = timestamp1.asInstanceOf[REVCTimestamp]
-        val timestamp2 : REVCTimestamp = timestamp2.asInstanceOf[REVCTimestamp]
-        val otherScalar = timestamp2.getScalar() 
-        val otherFrame = timestamp2.getFrame() 
-        val otherFrameHistory = timestamp2.getFrameHistory()
+        val revcTimestamp1 : REVCTimestamp = timestamp1.asInstanceOf[REVCTimestamp]
+        val revcTimestamp2 : REVCTimestamp = timestamp2.asInstanceOf[REVCTimestamp]
 
         // Compare frames
-        if (timestamp1.getFrame() > timestamp2.getFrame()) {
+        if (revcTimestamp1.getFrame() > revcTimestamp2.getFrame()) {
             return false 
         } else {
             // Compare scalars
-            val scalarToCompare = timestamp2.getFrameHistory().getOrElse(timestamp1.getFrame(), timestamp2.getScalar())
-            return (timestamp1.getScalar() <= scalarToCompare && scalarToCompare % timestamp1.getScalar() == 0)
+            val scalarToCompare = revcTimestamp2.getFrameHistory().getOrElse(revcTimestamp1.getFrame(), revcTimestamp2.getScalar())
+            return (revcTimestamp1.getScalar() <= scalarToCompare && scalarToCompare % revcTimestamp1.getScalar() == 0)
         }
     }
 }
