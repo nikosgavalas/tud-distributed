@@ -24,7 +24,7 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
      *  is not relevant for the VectorClock implementation
      *  @return a copy of the current vector clock list
      */
-    override def getTimestamp(receiver: Int) : LCTimestamp = {
+    override def getTimestamp(receiver: Int = -1) : LCTimestamp = {
         return new VCTimestamp(vector.clone.toList)
     }
     
@@ -49,23 +49,6 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
         }
     }
 
-    /** Returns whether the current clock value is logically before, 
-     *  beforeEqual or equal to the passed timestamp compareTimestamp. 
-     * 
-     *  @param compareTimestamp the timestamp to be compared with the clock
-     *  @return whether the current clock value happened before x
-     */ 
-    override def happenedBefore(compareTimestamp: LCTimestamp): Boolean = {
-        val otherVector = compareTimestamp.asInstanceOf[VCTimestamp].getVector()
-        for (i <- 0 until otherVector.length) {
-            if (otherVector(i) > vector(i)) {
-                return false
-            }
-        }
-
-        return true
-    }
-
     /** Converts the current vector clock value to a string.
      *  @return a string representation of the current vector clock value
      */ 
@@ -79,5 +62,29 @@ class VectorClock(me: Int, n: Int) extends LogicalClock {
      */ 
     override def getSizeBits: Int = {
         return vector.length * 32
+    }
+}
+
+/** VectorClock is the companion object of VectorClock that defines 
+ *  the comparison functionality of the vector clock. 
+ */
+object VectorClock extends LogicalClockComparator {
+    /** Returns whether timestamp1 is logically before, 
+     *  beforeEqual or equal to timestamp2. 
+     * 
+     *  @param timestamp1 the first timestamp to be compared
+     *  @param timestamp2 the second timestamp to be compared 
+     *  @return whether the timestamp1 happened before timestamp 2
+     */ 
+    override def happenedBefore(timestamp1: LCTimestamp, timestamp2 : LCTimestamp) : Boolean = {
+        val vector1 = timestamp1.asInstanceOf[VCTimestamp].getVector()
+        val vector2 = timestamp1.asInstanceOf[VCTimestamp].getVector()
+        for (i <- 0 until vector2.length) {
+            if (vector2(i) > vector1(i)) {
+                return false
+            }
+        }
+
+        return true
     }
 }

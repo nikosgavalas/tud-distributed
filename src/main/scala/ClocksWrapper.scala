@@ -1,29 +1,23 @@
-import logicalclocks.{LCTimestamp, DMTResEncVectorClock, EncVectorClock, LogicalClock, ResEncVectorClock, VectorClock}
-
-import scala.collection.mutable
+import logicalclocks.{LCTimestamp, LogicalClockComparator, DMTResEncVectorClock, EncVectorClock, LogicalClock, ResEncVectorClock, VectorClock}
 
 class ClocksWrapper(index: Int, numPeers: Int, selectedClocks: List[String]) {
-    val clocks: mutable.Map[String, LogicalClock] = mutable.SortedMap[String, LogicalClock]()
+    var clocks: List[(LogicalClockComparator, LogicalClock)] = List()
 
     if (selectedClocks.contains("VC"))
-        clocks.addOne(("VC", new VectorClock(index, numPeers)))
+        clocks = clocks:+(VectorClock, new VectorClock(index, numPeers))
     if (selectedClocks.contains("EVC"))
-        clocks.addOne(("EVC", new EncVectorClock(index)))
+        clocks = clocks:+(EncVectorClock, new EncVectorClock(index, numPeers))
     if (selectedClocks.contains("REVC"))
-        clocks.addOne(("REVC", new ResEncVectorClock(index)))
+        clocks = clocks:+(ResEncVectorClock, new ResEncVectorClock(index, numPeers))
     if (selectedClocks.contains("DMTREVC"))
-        clocks.addOne(("DMTREVC", new DMTResEncVectorClock(index)))
-
-    def getClock(clockStr: String): LogicalClock = {
-        clocks(clockStr)
-    }
+        clocks = clocks:+(ResEncVectorClock, new DMTResEncVectorClock(index, numPeers))
 
     def tick(): Unit = {
         clocks.foreach{ case (_, clock) => clock.localTick() }
     }
 
     def getTimestamps(receiver: Int): List[LCTimestamp] = {
-        clocks.map{ case (_, clock) => clock.getTimestamp(receiver) }.toList
+        return clocks.map{ case (_, clock) => clock.getTimestamp(receiver) }.toList
     }
 
     def merge(timestamps: List[LCTimestamp]): Unit = {
@@ -31,13 +25,13 @@ class ClocksWrapper(index: Int, numPeers: Int, selectedClocks: List[String]) {
     }
 
     def allConsistent(timestamps: List[LCTimestamp]): Boolean = {
-        val checks = clocks.zip(timestamps).map{ case ((_, clock), timestamp) => clock.happenedBefore(timestamp) }.toList
+        val checks = clocks.zip(timestamps).map{ case ((comparator, clock), timestamp) => comparator.happenedBefore(clock.getTimestamp(), timestamp) }.toList
         val all_true = checks.reduce((i, j) => i && j)
         val all_false = ! checks.reduce((i, j) => i || j)
-        all_true || all_false
+        return all_true || all_false
     }
 
     def getMemSizes: List[Int] = {
-        clocks.map{ case (_, clock) => clock.getSizeBits }.toList
+        return clocks.map{ case (_, clock) => clock.getSizeBits }.toList
     }
 }

@@ -20,7 +20,7 @@ class DMTREVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt
  *  merge resettable encoded vector clock. (See 
  *  https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9234035)
  */
-class DMTResEncVectorClock(me: Int) extends ResEncVectorClock(me, n) {
+class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
 
     /** Keep track of latest merged frame from each of the other clocks.
      */

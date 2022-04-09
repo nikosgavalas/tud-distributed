@@ -12,7 +12,7 @@ trait LogicalClock {
      *  might be necessary for some logical clocks
      *  @return an immutable deep-copy of the current state
      */
-    def getTimestamp(receiver: Int) : LCTimestamp
+    def getTimestamp(receiver: Int = -1) : LCTimestamp
 
     /** Increments the value of the clock.
      */
@@ -24,17 +24,24 @@ trait LogicalClock {
      */ 
     def mergeWith(mergeTimestamp: LCTimestamp): Unit
 
-    /** Returns whether the current clock value is logically before, 
-     *  beforeEqual or equal to the passed timestamp compareTimestamp. 
-     * 
-     *  @param compareTimestamp the timestamp to be compared with the clock
-     *  @return whether the current clock value happened before compareTimestamp
-     */ 
-    def happenedBefore(compareTimestamp: LCTimestamp): Boolean
-
     /** Returns the number of bits needed to represent the timestamp of the clock.
      *   
      *  @return the number of bits needed to represent the timestamp of this clock
      */ 
     def getSizeBits: Int
+}
+
+/** LogicalClockComparator is the trait that defines the functions 
+ *  that the companion object of a logical clock must have. 
+ *  In this case, a function to compare timestamps.
+ */
+trait LogicalClockComparator {
+    /** Returns whether the current clock value is logically before, 
+     *  beforeEqual or equal to the passed timestamp compareTimestamp. 
+     * 
+     *  @param timestamp1 the first timestamp to be compared
+     *  @param timestamp2 the second timestamp to be compared 
+     *  @return whether the timestamp1 happened before timestamp2
+     */ 
+    def happenedBefore(timestamp1: LCTimestamp, timestamp2: LCTimestamp): Boolean
 }

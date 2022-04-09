@@ -13,7 +13,7 @@ class EVCTimestamp(scalar: BigInt) extends LCTimestamp  {
  *  vector clock. (See 
  *  https://dl.acm.org/doi/abs/10.1145/3154273.3154305)
  */
-class EncVectorClock(me: Int) extends LogicalClock {
+class EncVectorClock(me: Int, n : Int) extends LogicalClock {
     
     /** The unique prime given to this instance of 
      *  EncVectorClock.
@@ -32,7 +32,7 @@ class EncVectorClock(me: Int) extends LogicalClock {
      *  is not relevant for the EVC implementation
      *  @return the current scalar wrapped in EVCTimestamp
      */
-    override def getTimestamp(receiver: Int): LCTimestamp = {
+    override def getTimestamp(receiver: Int = -1): LCTimestamp = {
         return new EVCTimestamp(scalar)
     }
 
@@ -53,17 +53,6 @@ class EncVectorClock(me: Int) extends LogicalClock {
         scalar = getLCM(scalar, otherScalar)
     }
 
-    /** Returns whether the current clock value is logically before, 
-     *  beforeEqual or equal to the passed timestamp compareTimestamp. 
-     * 
-     *  @param compareTimestamp the timestamp to be compared with the clock
-     *  @return whether the current clock value happened before x
-     */ 
-    override def happenedBefore(compareTimestamp: LCTimestamp): Boolean = {        
-        val otherScalar = compareTimestamp.asInstanceOf[EVCTimestamp].getScalar()
-        return (scalar <= otherScalar && otherScalar % scalar == 0)
-    }
-
     /** Returns the LCM of the two scalars.
      * 
      *  @param s1 the first scalar 
@@ -81,5 +70,23 @@ class EncVectorClock(me: Int) extends LogicalClock {
      */  
     override def getSizeBits: Int = {
         return scalar.bitLength
+    }
+}
+
+/** EncVectorClock is the companion object of EncVectorClock that defines 
+ *  the comparison functionality of the encoded vector clock. 
+ */
+object EncVectorClock extends LogicalClockComparator {
+    /** Returns whether timestamp1 is logically before, 
+     *  beforeEqual or equal to timestamp2. 
+     * 
+     *  @param timestamp1 the first timestamp to be compared
+     *  @param timestamp2 the second timestamp to be compared 
+     *  @return whether the timestamp1 happened before timestamp 2
+     */ 
+    def happenedBefore(timestamp1: LCTimestamp, timestamp2: LCTimestamp) : Boolean = {
+        val scalar1 = timestamp1.asInstanceOf[EVCTimestamp].getScalar()
+        val scalar2 = timestamp2.asInstanceOf[EVCTimestamp].getScalar()
+        return (scalar1 <= scalar2 && scalar2 % scalar1 == 0)
     }
 }

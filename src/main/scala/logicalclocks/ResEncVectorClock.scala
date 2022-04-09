@@ -5,7 +5,9 @@ package logicalclocks
  *  scalar, a integer for the frame number, and a mapping 
  *  from integers to BigIntegers for the frame history.
  */
-class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt]) extends EVCTimestamp(scalar) {
+class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt]) 
+        extends EVCTimestamp(scalar) {
+
     def getFrame() : Int = {
         return frame
     }
@@ -19,7 +21,7 @@ class REVCTimestamp(scalar: BigInt, frame: Int, frameHistory: Map[Int, BigInt]) 
  *  encoded vector clock. (See 
  *  https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9234035)
  */
-class ResEncVectorClock(me: Int) extends EncVectorClock(me, n) {
+class ResEncVectorClock(me: Int, n : Int) extends EncVectorClock(me, n) {
 
     /** Additional variables to represent the current clock value.
      *  We inherit the scalar from the EVC implementation.
@@ -38,9 +40,9 @@ class ResEncVectorClock(me: Int) extends EncVectorClock(me, n) {
      *  
      *  @param receiver the receiver of the timestamp, which 
      *  is not relevant for the REVC implementation
-     *  @return the current scalar and frameHistory
+     *  @return the REVCTimestamp of the current clock state
      */
-    override def getTimestamp(receiver: Int): LCTimestamp = {
+    override def getTimestamp(receiver: Int = -1): LCTimestamp = {
         // Copy frameHistory to an immutable Map
         var frameHistoryCopy = Map[Int, BigInt](frameHistory.toSeq: _*)
 
@@ -65,37 +67,12 @@ class ResEncVectorClock(me: Int) extends EncVectorClock(me, n) {
     /** Updates the scalar, frame and frameHistory by 
      *  merging the timestamp into the clock.
      * 
-     *  Note: mergeTimestamp is of LCTimestamp type because 
-     *  ClocksWrapper and Runner can not enforce 
-     *  the correct type of the timestamp.
-     * 
      *  @param mergeTimestamp the timestamp to be merged into the clock
      */ 
     override def mergeWith(mergeTimestamp: LCTimestamp) : Unit = {
-        val otherTimestamp = mergeTimestamp.asInstanceOf[REVCTimestamp]
-        scalarFrameMerge(otherTimestamp)
-        historyMerge(otherTimestamp)
-    }
-
-    /** Returns whether the current clock value is logically before 
-     *  the passed timestamp.
-     * 
-     *  @param compareTimestamp the timestamp to be compared with the clock
-     *  @return whether the current clock value happened before x
-     */ 
-    override def happenedBefore(compareTimestamp : LCTimestamp) : Boolean = {
-        val otherTimestamp = compareTimestamp.asInstanceOf[REVCTimestamp]
-        val otherScalar = otherTimestamp.getScalar() 
-        val otherFrame = otherTimestamp.getFrame() 
-        val otherFrameHistory = otherTimestamp.getFrameHistory()
-
-        // Returns true if Before, BeforeEqual or Equal
-        if (frame > otherFrame) {
-            return false 
-        } else {
-            val scalarToCompare = otherFrameHistory.getOrElse(frame, otherScalar)
-            return (scalar <= scalarToCompare && scalarToCompare % scalar == 0)
-        }
+        val mergeTimestamp : REVCTimestamp = mergeTimestamp.asInstanceOf[REVCTimestamp]
+        scalarFrameMerge(mergeTimestamp)
+        historyMerge(mergeTimestamp)
     }
 
     /** Updates the scalar and frame by merging the timestamp
@@ -103,7 +80,8 @@ class ResEncVectorClock(me: Int) extends EncVectorClock(me, n) {
      * 
      *  @param otherTimestamp the timestamp to be merged into the clock
      */ 
-    protected def scalarFrameMerge(otherTimestamp : REVCTimestamp) : Unit = {
+    protected def scalarFrameMerge(otherTimestamp : LCTimestamp) : Unit = {
+        val otherTimestamp : REVCTimestamp = otherTimestamp.asInstanceOf[REVCTimestamp]
         val otherScalar = otherTimestamp.getScalar() 
         val otherFrame = otherTimestamp.getFrame()
 
@@ -191,5 +169,35 @@ class ResEncVectorClock(me: Int) extends EncVectorClock(me, n) {
         val frameSize = 32
         val frameHistSize = frameHistory.map{ case (_, bigint) => 32 + bigint.bitLength }.sum
         return evcSize + frameSize + frameHistSize
+    }
+}
+
+
+/** ResEncVectorClock is the companion object of ResEncVectorClock that defines 
+ *  the comparison functionality of the resettable encoded vector clock. 
+ */
+object ResEncVectorClock extends LogicalClockComparator {
+    /** Returns whether timestamp1 is logically before, 
+     *  beforeEqual or equal to timestamp2. 
+     * 
+     *  @param timestamp1 the first timestamp to be compared
+     *  @param timestamp2 the second timestamp to be compared 
+     *  @return whether the timestamp1 happened before timestamp 2
+     */ 
+    def happenedBefore(timestamp1: LCTimestamp, timestamp2: LCTimestamp) : Boolean = {
+        val timestamp1 : REVCTimestamp = timestamp1.asInstanceOf[REVCTimestamp]
+        val timestamp2 : REVCTimestamp = timestamp2.asInstanceOf[REVCTimestamp]
+        val otherScalar = timestamp2.getScalar() 
+        val otherFrame = timestamp2.getFrame() 
+        val otherFrameHistory = timestamp2.getFrameHistory()
+
+        // Compare frames
+        if (timestamp1.getFrame() > timestamp2.getFrame()) {
+            return false 
+        } else {
+            // Compare scalars
+            val scalarToCompare = timestamp2.getFrameHistory().getOrElse(timestamp1.getFrame(), timestamp2.getScalar())
+            return (timestamp1.getScalar() <= scalarToCompare && scalarToCompare % timestamp1.getScalar() == 0)
+        }
     }
 }
