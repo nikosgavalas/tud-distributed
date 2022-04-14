@@ -41,7 +41,7 @@ class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
         // Copy differences to immutable map
         val differences = differencesPerPeer(receiver).clone
         
-        if (receiver == -1) {
+        if (receiver != -1) {
             // Reset differencesPerPeer for the receiver
             differencesPerPeer(receiver) = Set[Int]() 
         }
