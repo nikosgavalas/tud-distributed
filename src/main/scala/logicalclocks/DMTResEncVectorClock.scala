@@ -39,7 +39,8 @@ class DMTResEncVectorClock(me: Int, n : Int) extends ResEncVectorClock(me, n) {
      */
     override def getTimestamp(receiver: Int = -1): LCTimestamp = {
         // Copy differences to immutable map
-        val differences = differencesPerPeer(receiver).clone
+
+        val differences = if (receiver != -1) differencesPerPeer(receiver).clone else Set[Int]()
         
         if (receiver != -1) {
             // Reset differencesPerPeer for the receiver
