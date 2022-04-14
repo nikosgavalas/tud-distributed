@@ -146,8 +146,11 @@ object ParentActor {
                         child ! ControlMessage(printBitsizes, maxMessagesPerChild, processList, context.self,
                             childIndex, selectedClocks)}
 
-                    // send a BeginMessage to the first child to trigger the message deliveries
-                    processList.head ! BeginMessage()
+                    // send a BeginMessage to the first few children to trigger the message deliveries
+                    for (i <- 0 until Math.min(numberOfChildren, 5)) {
+                        processList(i) ! BeginMessage()
+                    }
+                    
 
                 case ChildDone() =>
                     // when all children finish, exit.
